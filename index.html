@@ -1431,9 +1431,8 @@ function toggleEye(){
   i.type = i.type === 'password' ? 'text' : 'password';
 }
 
-// Smart API Key Manager with ROT13 encoding
 const KeyManager = {
-  githubUrl: 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/keys.txt',
+  githubUrl: 'https://raw.githubusercontent.com/stetson609-wq/quizlet-ai/refs/heads/main/api/keys.txt',
   
   rot13(str) {
     return str.replace(/[a-zA-Z]/g, function(c) {
