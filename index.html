@@ -936,69 +936,944 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 </div>
 
 <script>
-// Fix the cycle key button - replace the existing cycleKey onclick with this:
 
-document.getElementById('cycleKey').onclick = () => {
-  if (window.availableKeys.length === 0) {
-    toast('No saved keys', 'warn');
-    return;
-  }
-  
-  // Get current key from input or global KEY
-  const currentKey = document.getElementById('guiKey').value || KEY;
-  let nextIndex = 0;
-  
-  if (currentKey) {
-    const currentIndex = window.availableKeys.indexOf(currentKey);
-    // If current key exists in list, go to next, otherwise start at 0
-    nextIndex = currentIndex !== -1 ? (currentIndex + 1) % window.availableKeys.length : 0;
-  }
-  
-  const nextKey = window.availableKeys[nextIndex];
-  
-  // Update input field
-  document.getElementById('guiKey').value = nextKey;
-  
-  // ACTUALLY SET THE KEY (this was missing)
-  KEY = nextKey;
-  localStorage.setItem('null_groq', nextKey);
-  
-  // Update availableKeys if needed
-  if (!window.availableKeys.includes(nextKey)) {
-    window.availableKeys.unshift(nextKey);
-    localStorage.setItem('groq_keys', JSON.stringify(window.availableKeys));
-    document.getElementById('keyCount').textContent = `${window.availableKeys.length} saved`;
-  }
-  
-  // Update any UI elements showing current key
-  if (typeof updateKeyUI === 'function') {
-    updateKeyUI();
-  }
-  
-  // Update model name display if it exists
-  const mdlName = document.getElementById('mdlName');
-  if (mdlName) {
-    mdlName.textContent = document.getElementById('guiModel').options[document.getElementById('guiModel').selectedIndex].text;
-  }
-  
-  // Animate the button
-  const cycleBtn = document.getElementById('cycleKey');
-  cycleBtn.style.transform = 'rotate(180deg)';
-  setTimeout(() => cycleBtn.style.transform = 'rotate(0deg)', 200);
-  
-  toast(`Switched to key ${nextIndex + 1} of ${window.availableKeys.length}`);
-};
-
-// Also add this helper function if it doesn't exist
-if (typeof updateKeyUI !== 'function') {
-  window.updateKeyUI = function() {
-    // Update any key indicators in the UI
-    const keyIndicator = document.querySelector('.key-indicator');
-    if (keyIndicator && KEY) {
-      keyIndicator.textContent = `${KEY.substring(0, 8)}...`;
+// ============================================
+// PREMIUM FILE UPLOAD - PAPERCLIP LEFT OF SEND
+// ============================================
+(function() {
+  class PremiumFileUpload {
+    constructor() {
+      this.files = new Map();
+      this.uploadQueue = [];
+      this.maxSize = 100 * 1024 * 1024; // 100MB
+      this.maxFiles = 10;
+      
+      // Theme colors (matching your dark theme)
+      this.theme = {
+        bg: 'rgba(18, 18, 18, 0.98)',
+        bgLight: 'rgba(255, 255, 255, 0.03)',
+        bgHover: 'rgba(0, 255, 136, 0.15)',
+        border: 'rgba(255, 255, 255, 0.1)',
+        text: '#eeeee8',
+        accent: '#00ff88',
+        accentGlow: 'rgba(0, 255, 136, 0.3)',
+        error: '#ff4d4d',
+        success: '#00ff88',
+        neonGreen: '#00ff88'
+      };
+      
+      this.supportedFormats = {
+        image: { exts: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'], icon: '🖼️', color: '#ffb347' },
+        code: { exts: ['.js', '.py', '.java', '.cpp', '.html', '.css', '.json', '.xml', '.yaml', '.jsx', '.tsx', '.php', '.rb', '.go', '.rs'], icon: '💻', color: '#569cd6' },
+        document: { exts: ['.txt', '.pdf', '.doc', '.docx', '.md', '.rst', '.rtf'], icon: '📄', color: '#ffa07a' },
+        data: { exts: ['.csv', '.xls', '.xlsx', '.json', '.xml', '.yaml'], icon: '📊', color: '#4caf50' },
+        audio: { exts: ['.mp3', '.wav', '.ogg', '.m4a', '.flac'], icon: '🎵', color: '#9c27b0' },
+        video: { exts: ['.mp4', '.webm', '.mov', '.avi', '.mkv'], icon: '🎬', color: '#f44336' },
+        archive: { exts: ['.zip', '.tar', '.gz', '.7z', '.rar'], icon: '📦', color: '#ff9800' }
+      };
+      
+      this.init();
     }
-  };
-}
+    
+    init() {
+      this.injectStyles();
+      this.createPaperclipButton();
+      this.createDropZone();
+      this.createFileDrawer();
+      this.bindEvents();
+    }
+    
+    injectStyles() {
+      const styles = `
+        /* Paperclip Button */
+        .premium-paperclip-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: transparent;
+          border: none;
+          color: rgba(255, 255, 255, 0.5);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+          position: relative;
+          font-size: 20px;
+          outline: none;
+        }
+        
+        .premium-paperclip-btn:hover {
+          color: ${this.theme.neonGreen};
+          background: ${this.theme.bgHover};
+          transform: scale(1.1);
+          box-shadow: 0 0 15px ${this.theme.accentGlow};
+        }
+        
+        .premium-paperclip-btn:active {
+          transform: scale(0.95);
+        }
+        
+        .file-count-badge {
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          background: ${this.theme.neonGreen};
+          color: black;
+          font-size: 10px;
+          font-weight: bold;
+          min-width: 18px;
+          height: 18px;
+          border-radius: 9px;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          padding: 0 4px;
+          border: 1px solid rgba(0,0,0,0.3);
+        }
+        
+        /* Drop Zone */
+        .premium-dropzone {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.85);
+          backdrop-filter: blur(12px);
+          display: none;
+          align-items: center;
+          justify-content: center;
+          z-index: 10000;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          font-family: 'Syne', sans-serif;
+        }
+        
+        .premium-dropzone.active {
+          opacity: 1;
+        }
+        
+        .dropzone-content {
+          text-align: center;
+          padding: 48px;
+          background: ${this.theme.bg};
+          border: 2px dashed ${this.theme.border};
+          border-radius: 32px;
+          box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+          transform: scale(0.9) translateY(20px);
+          transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          max-width: 500px;
+          width: 90%;
+        }
+        
+        .premium-dropzone.active .dropzone-content {
+          transform: scale(1) translateY(0);
+        }
+        
+        .dropzone-icon {
+          width: 80px;
+          height: 80px;
+          margin: 0 auto 24px;
+          background: ${this.theme.accentGlow};
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: float 3s ease-in-out infinite;
+        }
+        
+        .dropzone-icon svg {
+          stroke: ${this.theme.neonGreen};
+          width: 40px;
+          height: 40px;
+        }
+        
+        .dropzone-title {
+          font-size: 28px;
+          font-weight: 600;
+          color: ${this.theme.text};
+          margin-bottom: 12px;
+          letter-spacing: -0.01em;
+        }
+        
+        .dropzone-subtitle {
+          color: rgba(255, 255, 255, 0.6);
+          margin-bottom: 24px;
+          font-size: 15px;
+        }
+        
+        .dropzone-formats {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          justify-content: center;
+          margin-bottom: 24px;
+        }
+        
+        .format-badge {
+          padding: 4px 12px;
+          background: ${this.theme.bgLight};
+          border: 1px solid ${this.theme.border};
+          border-radius: 20px;
+          font-size: 11px;
+          color: rgba(255, 255, 255, 0.7);
+          transition: all 0.2s;
+        }
+        
+        .format-badge:hover {
+          border-color: ${this.theme.neonGreen};
+          color: ${this.theme.neonGreen};
+          background: ${this.theme.bgHover};
+          box-shadow: 0 0 15px ${this.theme.accentGlow};
+        }
+        
+        .dropzone-button {
+          background: ${this.theme.neonGreen};
+          color: #000;
+          border: none;
+          padding: 14px 32px;
+          border-radius: 40px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          margin-bottom: 16px;
+          box-shadow: 0 4px 15px ${this.theme.accentGlow};
+        }
+        
+        .dropzone-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px ${this.theme.accentGlow};
+        }
+        
+        .dropzone-limits {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.4);
+        }
+        
+        /* File Drawer */
+        .file-drawer {
+          position: fixed;
+          bottom: -400px;
+          right: 20px;
+          width: 360px;
+          background: ${this.theme.bg};
+          backdrop-filter: blur(24px);
+          border: 1px solid ${this.theme.border};
+          border-radius: 24px 24px 0 0;
+          box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+          transition: bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          z-index: 9999;
+          font-family: 'Syne', sans-serif;
+        }
+        
+        .file-drawer.open {
+          bottom: 0;
+        }
+        
+        .drawer-header {
+          padding: 16px 20px;
+          border-bottom: 1px solid ${this.theme.border};
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .drawer-header:hover {
+          background: ${this.theme.bgHover};
+          border-color: ${this.theme.neonGreen};
+        }
+        
+        .drawer-title {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-weight: 600;
+          color: ${this.theme.text};
+          transition: color 0.2s;
+        }
+        
+        .drawer-title svg {
+          stroke: ${this.theme.text};
+          transition: stroke 0.2s;
+        }
+        
+        .drawer-header:hover .drawer-title {
+          color: ${this.theme.neonGreen};
+        }
+        
+        .drawer-header:hover .drawer-title svg {
+          stroke: ${this.theme.neonGreen};
+        }
+        
+        .file-count {
+          background: ${this.theme.neonGreen};
+          color: #000;
+          padding: 2px 8px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+        
+        .drawer-toggle {
+          width: 30px;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: transform 0.3s, color 0.2s;
+          color: ${this.theme.text};
+        }
+        
+        .drawer-header:hover .drawer-toggle {
+          color: ${this.theme.neonGreen};
+        }
+        
+        .drawer-toggle.open {
+          transform: rotate(180deg);
+        }
+        
+        .drawer-content {
+          max-height: 300px;
+          overflow-y: auto;
+          padding: 16px;
+          scrollbar-width: thin;
+          scrollbar-color: ${this.theme.neonGreen} ${this.theme.border};
+        }
+        
+        .drawer-content::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .drawer-content::-webkit-scrollbar-track {
+          background: ${this.theme.border};
+        }
+        
+        .drawer-content::-webkit-scrollbar-thumb {
+          background: ${this.theme.neonGreen};
+          border-radius: 3px;
+        }
+        
+        .file-item {
+          display: flex;
+          align-items: center;
+          padding: 12px;
+          background: ${this.theme.bgLight};
+          border: 1px solid ${this.theme.border};
+          border-radius: 12px;
+          margin-bottom: 8px;
+          animation: slideIn 0.3s ease;
+          transition: all 0.2s;
+        }
+        
+        .file-item:hover {
+          background: ${this.theme.bgHover};
+          border-color: ${this.theme.neonGreen};
+          box-shadow: 0 0 15px ${this.theme.accentGlow};
+        }
+        
+        .file-item:hover .file-name {
+          color: ${this.theme.neonGreen};
+        }
+        
+        .file-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-right: 12px;
+          font-size: 18px;
+        }
+        
+        .file-details {
+          flex: 1;
+          min-width: 0;
+        }
+        
+        .file-name {
+          color: ${this.theme.text};
+          font-size: 13px;
+          font-weight: 500;
+          margin-bottom: 4px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          transition: color 0.2s;
+        }
+        
+        .file-meta {
+          display: flex;
+          gap: 12px;
+          font-size: 10px;
+          color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .file-size {
+          color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .file-type {
+          color: ${this.theme.neonGreen};
+        }
+        
+        .file-actions {
+          display: flex;
+          gap: 4px;
+        }
+        
+        .file-action-btn {
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          background: transparent;
+          border: 1px solid ${this.theme.border};
+          color: rgba(255, 255, 255, 0.5);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        
+        .file-action-btn:hover {
+          background: ${this.theme.bgHover};
+          color: ${this.theme.neonGreen};
+          border-color: ${this.theme.neonGreen};
+          box-shadow: 0 0 15px ${this.theme.accentGlow};
+        }
+        
+        .file-action-btn.delete:hover {
+          background: ${this.theme.error};
+          border-color: ${this.theme.neonGreen};
+          color: ${this.theme.neonGreen};
+        }
+        
+        .upload-progress {
+          position: fixed;
+          bottom: 20px;
+          left: 20px;
+          background: ${this.theme.bg};
+          border: 1px solid ${this.theme.border};
+          border-radius: 16px;
+          padding: 16px;
+          color: ${this.theme.text};
+          z-index: 9999;
+          min-width: 250px;
+          animation: slideIn 0.3s ease;
+        }
+        
+        .progress-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+        
+        .progress-header svg {
+          stroke: ${this.theme.neonGreen};
+        }
+        
+        .progress-bar-container {
+          width: 100%;
+          height: 4px;
+          background: ${this.theme.border};
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        
+        .progress-bar-fill {
+          height: 100%;
+          background: ${this.theme.neonGreen};
+          width: 0%;
+          transition: width 0.3s ease;
+          box-shadow: 0 0 10px ${this.theme.accentGlow};
+        }
+        
+        .progress-stats {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 8px;
+          font-size: 11px;
+          color: rgba(255, 255, 255, 0.5);
+        }
+        
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        
+        .toast-notification {
+          position: fixed;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%) translateY(100px);
+          background: ${this.theme.bg};
+          border: 1px solid ${this.theme.border};
+          border-radius: 40px;
+          padding: 12px 24px;
+          color: ${this.theme.text};
+          font-family: 'Syne', sans-serif;
+          font-size: 14px;
+          z-index: 10001;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+          transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        
+        .toast-notification.show {
+          transform: translateX(-50%) translateY(0);
+        }
+        
+        .toast-notification.success {
+          border-color: ${this.theme.neonGreen};
+          background: ${this.theme.bgHover};
+          color: ${this.theme.neonGreen};
+        }
+        
+        .toast-notification.error {
+          border-color: ${this.theme.error};
+          background: rgba(255, 77, 77, 0.1);
+        }
+      `;
+      
+      const styleEl = document.createElement('style');
+      styleEl.textContent = styles;
+      document.head.appendChild(styleEl);
+    }
+    
+    createPaperclipButton() {
+      const sendBtn = document.getElementById('sendBtn');
+      if (!sendBtn) return;
+      
+      // Create wrapper
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+      
+      // Insert wrapper before send button
+      sendBtn.parentNode.insertBefore(wrapper, sendBtn);
+      
+      // Move send button into wrapper
+      wrapper.appendChild(sendBtn);
+      
+      // Create paperclip button
+      this.uploadBtn = document.createElement('button');
+      this.uploadBtn.className = 'premium-paperclip-btn';
+      this.uploadBtn.title = 'Upload files';
+      this.uploadBtn.innerHTML = `📎<span class="file-count-badge">0</span>`;
+      
+      this.uploadBtn.addEventListener('click', () => this.openFilePicker());
+      
+      // Insert at beginning of wrapper (left of send button)
+      wrapper.insertBefore(this.uploadBtn, sendBtn);
+      
+      // Store badge reference
+      this.badge = this.uploadBtn.querySelector('.file-count-badge');
+    }
+    
+    createDropZone() {
+      this.dropZone = document.createElement('div');
+      this.dropZone.className = 'premium-dropzone';
+      this.dropZone.innerHTML = `
+        <div class="dropzone-content">
+          <div class="dropzone-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="dropzone-title">Drop files to upload</div>
+          <div class="dropzone-subtitle">Support for all major formats</div>
+          <div class="dropzone-formats">
+            ${Object.entries(this.supportedFormats).map(([name, format]) => 
+              `<span class="format-badge">${format.icon} ${name}</span>`
+            ).join('')}
+          </div>
+          <button class="dropzone-button">Choose files</button>
+          <div class="dropzone-limits">
+            Max ${this.maxFiles} files • Up to 100MB each
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(this.dropZone);
+      
+      this.dropZone.querySelector('.dropzone-button').addEventListener('click', () => {
+        this.openFilePicker();
+      });
+    }
+    
+    createFileDrawer() {
+      this.drawer = document.createElement('div');
+      this.drawer.className = 'file-drawer';
+      this.drawer.innerHTML = `
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+              <polyline points="13 2 13 9 20 9"/>
+            </svg>
+            <span>Attached files</span>
+            <span class="file-count">0</span>
+          </div>
+          <div class="drawer-toggle">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+        </div>
+        <div class="drawer-content"></div>
+      `;
+      
+      document.body.appendChild(this.drawer);
+      
+      const header = this.drawer.querySelector('.drawer-header');
+      const toggle = this.drawer.querySelector('.drawer-toggle');
+      
+      header.addEventListener('click', () => {
+        this.drawer.classList.toggle('open');
+        toggle.classList.toggle('open');
+      });
+    }
+    
+    bindEvents() {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        document.body.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      });
+      
+      document.body.addEventListener('dragenter', () => {
+        this.dropZone.style.display = 'flex';
+        setTimeout(() => this.dropZone.classList.add('active'), 10);
+      });
+      
+      this.dropZone.addEventListener('dragleave', (e) => {
+        if (!this.dropZone.contains(e.relatedTarget)) {
+          this.dropZone.classList.remove('active');
+          setTimeout(() => {
+            if (!this.dropZone.classList.contains('active')) {
+              this.dropZone.style.display = 'none';
+            }
+          }, 300);
+        }
+      });
+      
+      this.dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        this.dropZone.classList.remove('active');
+        setTimeout(() => this.dropZone.style.display = 'none', 300);
+        
+        const files = Array.from(e.dataTransfer.files);
+        this.processFiles(files);
+      });
+      
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.dropZone.style.display === 'flex') {
+          this.dropZone.classList.remove('active');
+          setTimeout(() => this.dropZone.style.display = 'none', 300);
+        }
+      });
+    }
+    
+    openFilePicker() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.accept = '*/*';
+      
+      input.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        this.processFiles(files);
+        
+        if (this.dropZone.style.display === 'flex') {
+          this.dropZone.classList.remove('active');
+          setTimeout(() => this.dropZone.style.display = 'none', 300);
+        }
+      });
+      
+      input.click();
+    }
+    
+    async processFiles(files) {
+      if (this.files.size + files.length > this.maxFiles) {
+        this.showToast(`Maximum ${this.maxFiles} files allowed`, 'error');
+        return;
+      }
+      
+      const validFiles = files.filter(file => {
+        if (file.size > this.maxSize) {
+          this.showToast(`${file.name} exceeds 100MB`, 'error');
+          return false;
+        }
+        return true;
+      });
+      
+      if (validFiles.length === 0) return;
+      
+      this.showProgress(validFiles.length);
+      
+      for (const file of validFiles) {
+        await this.uploadFile(file);
+      }
+      
+      this.updateDrawer();
+    }
+    
+    async uploadFile(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        const fileId = Date.now() + '-' + Math.random();
+        const fileType = this.getFileType(file.name);
+        
+        reader.onload = (e) => {
+          const fileData = {
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            type: fileType,
+            format: this.supportedFormats[fileType],
+            data: e.target.result,
+            uploadedAt: new Date().toISOString()
+          };
+          
+          this.files.set(fileId, fileData);
+          this.insertFileReference(fileData);
+          this.updateProgress();
+          resolve();
+        };
+        
+        reader.onerror = () => {
+          this.showToast(`Failed to upload ${file.name}`, 'error');
+          resolve();
+        };
+        
+        if (fileType === 'image') {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      });
+    }
+    
+    getFileType(filename) {
+      const ext = '.' + filename.split('.').pop().toLowerCase();
+      
+      for (const [type, format] of Object.entries(this.supportedFormats)) {
+        if (format.exts.includes(ext)) return type;
+      }
+      
+      return 'document';
+    }
+    
+    insertFileReference(file) {
+      const textarea = document.querySelector('textarea');
+      const contentEditable = document.querySelector('[contenteditable="true"]');
+      
+      let fileRef = `\n[📎 ${file.name} (${(file.size / 1024).toFixed(1)}KB)]\n`;
+      
+      if (file.type === 'image') {
+        fileRef = `\n![${file.name}](${file.data})\n`;
+      } else if (file.type === 'code') {
+        fileRef = `\n\`\`\`\n${file.data}\n\`\`\`\n`;
+      }
+      
+      if (textarea) {
+        textarea.value += fileRef;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      } else if (contentEditable) {
+        contentEditable.innerHTML += fileRef.replace(/\n/g, '<br>');
+        contentEditable.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      
+      this.showToast(`📎 ${file.name} attached`, 'success');
+    }
+    
+    updateDrawer() {
+      const content = this.drawer.querySelector('.drawer-content');
+      const count = this.drawer.querySelector('.file-count');
+      
+      count.textContent = this.files.size;
+      this.badge.textContent = this.files.size;
+      this.badge.style.display = this.files.size > 0 ? 'flex' : 'none';
+      
+      if (this.files.size === 0) {
+        content.innerHTML = `
+          <div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.3);">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="margin-bottom: 10px; stroke: ${this.theme.neonGreen};">
+              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+              <polyline points="13 2 13 9 20 9"/>
+            </svg>
+            <div>No files attached</div>
+          </div>
+        `;
+        return;
+      }
+      
+      content.innerHTML = Array.from(this.files.values()).map(file => `
+        <div class="file-item" data-id="${file.id}">
+          <div class="file-icon" style="background: ${file.format?.color}20; color: ${file.format?.color}">
+            ${file.format?.icon || '📄'}
+          </div>
+          <div class="file-details">
+            <div class="file-name">${file.name}</div>
+            <div class="file-meta">
+              <span class="file-size">${(file.size / 1024).toFixed(1)}KB</span>
+              <span class="file-type">${file.type}</span>
+            </div>
+          </div>
+          <div class="file-actions">
+            <button class="file-action-btn" title="Copy reference" onclick="window.uploadSystem?.copyFileRef('${file.id}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+            <button class="file-action-btn delete" title="Remove" onclick="window.uploadSystem?.removeFile('${file.id}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+      
+      if (!this.drawer.classList.contains('open')) {
+        setTimeout(() => this.drawer.classList.add('open'), 300);
+      }
+    }
+    
+    removeFile(fileId) {
+      this.files.delete(fileId);
+      this.updateDrawer();
+      this.showToast('File removed', 'success');
+      
+      if (this.files.size === 0) {
+        this.drawer.classList.remove('open');
+      }
+    }
+    
+    copyFileRef(fileId) {
+      const file = this.files.get(fileId);
+      if (!file) return;
+      
+      const ref = `[📎 ${file.name}]`;
+      navigator.clipboard?.writeText(ref).then(() => {
+        this.showToast('Reference copied!', 'success');
+      });
+    }
+    
+    showProgress(fileCount) {
+      const oldProgress = document.querySelector('.upload-progress');
+      if (oldProgress) oldProgress.remove();
+      
+      this.progress = {
+        total: fileCount,
+        current: 0,
+        element: null
+      };
+      
+      const el = document.createElement('div');
+      el.className = 'upload-progress';
+      el.innerHTML = `
+        <div class="progress-header">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+          <span>Uploading files...</span>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" style="width: 0%"></div>
+        </div>
+        <div class="progress-stats">
+          <span class="progress-current">0/${fileCount}</span>
+          <span class="progress-percent">0%</span>
+        </div>
+      `;
+      
+      document.body.appendChild(el);
+      this.progress.element = el;
+    }
+    
+    updateProgress() {
+      if (!this.progress) return;
+      
+      this.progress.current++;
+      const percent = (this.progress.current / this.progress.total) * 100;
+      
+      const fill = this.progress.element.querySelector('.progress-bar-fill');
+      const currentSpan = this.progress.element.querySelector('.progress-current');
+      const percentSpan = this.progress.element.querySelector('.progress-percent');
+      
+      fill.style.width = `${percent}%`;
+      currentSpan.textContent = `${this.progress.current}/${this.progress.total}`;
+      percentSpan.textContent = `${Math.round(percent)}%`;
+      
+      if (this.progress.current === this.progress.total) {
+        setTimeout(() => {
+          this.progress.element.remove();
+          this.progress = null;
+        }, 2000);
+      }
+    }
+    
+    showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast-notification ${type}`;
+      toast.innerHTML = `
+        ${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}
+        <span>${message}</span>
+      `;
+      
+      document.body.appendChild(toast);
+      
+      setTimeout(() => toast.classList.add('show'), 10);
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+  }
+  
+  function init() {
+    const checkInterval = setInterval(() => {
+      const sendBtn = document.getElementById('sendBtn');
+      if (sendBtn) {
+        clearInterval(checkInterval);
+        window.uploadSystem = new PremiumFileUpload();
+        console.log('✅ Premium File Upload Ready - Paperclip left of send');
+      }
+    }, 500);
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
   
 // ============================================
 // SMART API KEY AUTOFILLER - FIXED ENDPOINT
