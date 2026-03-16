@@ -936,6 +936,70 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 </div>
 
 <script>
+// Fix the cycle key button - replace the existing cycleKey onclick with this:
+
+document.getElementById('cycleKey').onclick = () => {
+  if (window.availableKeys.length === 0) {
+    toast('No saved keys', 'warn');
+    return;
+  }
+  
+  // Get current key from input or global KEY
+  const currentKey = document.getElementById('guiKey').value || KEY;
+  let nextIndex = 0;
+  
+  if (currentKey) {
+    const currentIndex = window.availableKeys.indexOf(currentKey);
+    // If current key exists in list, go to next, otherwise start at 0
+    nextIndex = currentIndex !== -1 ? (currentIndex + 1) % window.availableKeys.length : 0;
+  }
+  
+  const nextKey = window.availableKeys[nextIndex];
+  
+  // Update input field
+  document.getElementById('guiKey').value = nextKey;
+  
+  // ACTUALLY SET THE KEY (this was missing)
+  KEY = nextKey;
+  localStorage.setItem('null_groq', nextKey);
+  
+  // Update availableKeys if needed
+  if (!window.availableKeys.includes(nextKey)) {
+    window.availableKeys.unshift(nextKey);
+    localStorage.setItem('groq_keys', JSON.stringify(window.availableKeys));
+    document.getElementById('keyCount').textContent = `${window.availableKeys.length} saved`;
+  }
+  
+  // Update any UI elements showing current key
+  if (typeof updateKeyUI === 'function') {
+    updateKeyUI();
+  }
+  
+  // Update model name display if it exists
+  const mdlName = document.getElementById('mdlName');
+  if (mdlName) {
+    mdlName.textContent = document.getElementById('guiModel').options[document.getElementById('guiModel').selectedIndex].text;
+  }
+  
+  // Animate the button
+  const cycleBtn = document.getElementById('cycleKey');
+  cycleBtn.style.transform = 'rotate(180deg)';
+  setTimeout(() => cycleBtn.style.transform = 'rotate(0deg)', 200);
+  
+  toast(`Switched to key ${nextIndex + 1} of ${window.availableKeys.length}`);
+};
+
+// Also add this helper function if it doesn't exist
+if (typeof updateKeyUI !== 'function') {
+  window.updateKeyUI = function() {
+    // Update any key indicators in the UI
+    const keyIndicator = document.querySelector('.key-indicator');
+    if (keyIndicator && KEY) {
+      keyIndicator.textContent = `${KEY.substring(0, 8)}...`;
+    }
+  };
+}
+  
 // ============================================
 // SMART API KEY AUTOFILLER - FIXED ENDPOINT
 // ============================================
