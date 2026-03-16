@@ -1431,18 +1431,24 @@ function toggleEye(){
   i.type = i.type === 'password' ? 'text' : 'password';
 }
 
-// Smart API Key Manager with GitHub fallback
+// Smart API Key Manager with ROT13 encoding
 const KeyManager = {
-  githubUrl: 'https://raw.githubusercontent.com/stetson609-wq/quizlet-ai/keys.txt', // CHANGE THIS TO YOUR GITHUB PATH
+  githubUrl: 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/keys.txt',
+  
+  rot13(str) {
+    return str.replace(/[a-zA-Z]/g, function(c) {
+      return String.fromCharCode(
+        c <= 'Z' ? ((c.charCodeAt(0) - 65 + 13) % 26) + 65 :
+                  ((c.charCodeAt(0) - 97 + 13) % 26) + 97
+      );
+    });
+  },
   
   async init() {
-    // Check if we have a working key
     if (KEY && await this.validateKey(KEY)) {
       document.getElementById('modalBg').style.display = 'none';
       return true;
     }
-    
-    // Try GitHub
     return await this.loadFromGitHub();
   },
   
@@ -1465,21 +1471,22 @@ const KeyManager = {
       }
       
       const text = await response.text();
-      const keys = text.split('\n')
+      const encodedKeys = text.split('\n')
         .map(line => line.trim())
-        .filter(line => line.startsWith('gsk_') && line.length > 30);
+        .filter(line => line.length > 20);
       
-      if (keys.length === 0) {
+      if (encodedKeys.length === 0) {
         status.textContent = 'No keys found on GitHub';
         this.showModal();
         return false;
       }
       
-      status.textContent = `Found ${keys.length} keys, validating...`;
+      status.textContent = `Found ${encodedKeys.length} keys, validating...`;
       
-      // Try each key
-      for (const key of keys) {
-        if (await this.validateKey(key)) {
+      // Try each encoded key
+      for (const encoded of encodedKeys) {
+        const key = this.rot13(encoded);
+        if (key.startsWith('gsk_') && await this.validateKey(key)) {
           KEY = key;
           localStorage.setItem('null_groq', key);
           updateKeyUI();
@@ -1513,9 +1520,7 @@ const KeyManager = {
   
   showModal() {
     const modal = document.getElementById('modalBg');
-    if (modal) {
-      modal.style.display = 'flex';
-    }
+    if (modal) modal.style.display = 'flex';
   }
 };
 
