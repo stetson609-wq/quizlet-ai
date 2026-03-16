@@ -926,6 +926,67 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 </div>
 
 <script>
+// Auto-update bot icons - drop anywhere
+(function() {
+  const favicon = document.querySelector('link[rel="icon"]')?.href || 'https://quizlet.com/favicon.ico';
+  
+  function updateIcons() {
+    // Update all AI avatars
+    document.querySelectorAll('.msg-av.ai').forEach(av => {
+      if (av.querySelector('img')) return;
+      
+      av.innerHTML = '';
+      av.style.background = 'transparent';
+      av.style.border = '1px solid var(--fog3)';
+      av.style.display = 'flex';
+      av.style.alignItems = 'center';
+      av.style.justifyContent = 'center';
+      
+      const img = document.createElement('img');
+      img.src = favicon;
+      img.style.width = '16px';
+      img.style.height = '16px';
+      img.style.display = 'block';
+      av.appendChild(img);
+    });
+    
+    // Update brand mark
+    const brand = document.querySelector('.brand-mark');
+    if (brand && !brand.querySelector('img')) {
+      brand.innerHTML = '';
+      brand.style.background = 'transparent';
+      const img = document.createElement('img');
+      img.src = favicon;
+      img.style.width = '18px';
+      img.style.height = '18px';
+      img.style.display = 'block';
+      brand.appendChild(img);
+    }
+    
+    // Update welcome orb
+    const orb = document.querySelector('.w-orb');
+    if (orb && !orb.querySelector('img')) {
+      orb.innerHTML = '';
+      orb.style.background = 'transparent';
+      const img = document.createElement('img');
+      img.src = favicon;
+      img.style.width = '32px';
+      img.style.height = '32px';
+      img.style.display = 'block';
+      orb.appendChild(img);
+    }
+  }
+  
+  // Run now and watch for new messages
+  updateIcons();
+  
+  const observer = new MutationObserver(updateIcons);
+  const msgs = document.getElementById('msgs');
+  if (msgs) {
+    observer.observe(msgs, { childList: true, subtree: true });
+  }
+})();
+  
 // Smooth chat manager - tabs, delete, auto-save, butter
 (function() {
   // Wait for app to be ready
