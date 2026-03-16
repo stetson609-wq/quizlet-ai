@@ -733,33 +733,27 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 <div class="noise"></div>
 
 <!-- Modal -->
-<!-- Smart API key modal - only shows when needed -->
-<div class="modal-bg" id="modalBg" style="display: none;">
+<div class="modal-bg" id="modalBg">
   <div class="modal-card">
     <div class="modal-icon">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="11" width="18" height="11" rx="2.5"></rect>
-        <path d="M7 11V7a5 5 0 0110 0v4"></path>
+        <rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0110 0v4"/>
       </svg>
     </div>
-    <h2 id="modalTitle">API Key Required</h2>
-    <p id="modalMessage">No valid API keys found. Add your key below or we'll try GitHub fallback.</p>
+    <h2>Connect Groq</h2>
+    <p>Your API key is stored only in your browser's localStorage — never transmitted to any server except Groq's directly.</p>
     <div class="modal-input-wrap">
-      <input class="modal-input" id="keyInput" type="password" placeholder="gsk_••••••••••••••••••••••" spellcheck="false" autocomplete="off">
+      <input class="modal-input" id="keyInput" type="password" placeholder="gsk_••••••••••••••••••••••" spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter')saveKey()"/>
       <button class="modal-eye" id="eyeBtn" onclick="toggleEye()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
         </svg>
       </button>
     </div>
-    <p class="modal-hint" id="modalHint">
-      <span id="githubStatus">Checking GitHub for keys...</span><br>
-      <a href="https://console.groq.com" target="_blank">Get a free key →</a>
-    </p>
+    <p class="modal-hint">Get a free key at <a href="https://console.groq.com" target="_blank">console.groq.com</a> — blazing fast inference, generous free tier.</p>
     <div class="modal-btns">
-      <button class="mbtn-ghost" id="cancelModalBtn" onclick="closeModal()" style="display: none;">Close</button>
-      <button class="mbtn-primary" id="saveKeyBtn" onclick="saveKey()">Save & continue</button>
+      <button class="mbtn-ghost" id="cancelModalBtn" onclick="closeModal()">Later</button>
+      <button class="mbtn-primary" onclick="saveKey()">Save & start chatting →</button>
     </div>
   </div>
 </div>
@@ -932,8 +926,6 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 </div>
 
 <script>
-
-
 // Smooth chat manager - tabs, delete, auto-save, butter
 (function() {
   // Wait for app to be ready
@@ -1430,150 +1422,6 @@ function toggleEye(){
   const i = document.getElementById('keyInput');
   i.type = i.type === 'password' ? 'text' : 'password';
 }
-
-const KeyManager = {
-  githubUrl: 'https://raw.githubusercontent.com/stetson609-wq/quizlet-ai/refs/heads/main/api/keys.txt',
-  
-  rot13(str) {
-    return str.replace(/[a-zA-Z]/g, function(c) {
-      return String.fromCharCode(
-        c <= 'Z' ? ((c.charCodeAt(0) - 65 + 13) % 26) + 65 :
-                  ((c.charCodeAt(0) - 97 + 13) % 26) + 97
-      );
-    });
-  },
-  
-  async init() {
-    if (KEY && await this.validateKey(KEY)) {
-      document.getElementById('modalBg').style.display = 'none';
-      return true;
-    }
-    return await this.loadFromGitHub();
-  },
-  
-  async loadFromGitHub() {
-    const status = document.getElementById('githubStatus');
-    if (!status) return false;
-    
-    status.textContent = 'Loading keys from GitHub...';
-    
-    try {
-      const response = await fetch(this.githubUrl, {
-        cache: 'no-cache',
-        headers: { 'Accept': 'text/plain' }
-      });
-      
-      if (!response.ok) {
-        status.textContent = 'GitHub unavailable';
-        this.showModal();
-        return false;
-      }
-      
-      const text = await response.text();
-      const encodedKeys = text.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 20);
-      
-      if (encodedKeys.length === 0) {
-        status.textContent = 'No keys found on GitHub';
-        this.showModal();
-        return false;
-      }
-      
-      status.textContent = `Found ${encodedKeys.length} keys, validating...`;
-      
-      // Try each encoded key
-      for (const encoded of encodedKeys) {
-        const key = this.rot13(encoded);
-        if (key.startsWith('gsk_') && await this.validateKey(key)) {
-          KEY = key;
-          localStorage.setItem('null_groq', key);
-          updateKeyUI();
-          document.getElementById('modalBg').style.display = 'none';
-          toast('Connected with GitHub key');
-          return true;
-        }
-      }
-      
-      status.textContent = 'GitHub keys are invalid';
-      this.showModal();
-      return false;
-      
-    } catch (e) {
-      status.textContent = 'GitHub check failed';
-      this.showModal();
-      return false;
-    }
-  },
-  
-  async validateKey(key) {
-    try {
-      const res = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { 'Authorization': `Bearer ${key}` }
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  },
-  
-  showModal() {
-    const modal = document.getElementById('modalBg');
-    if (modal) modal.style.display = 'flex';
-  }
-};
-
-// Override saveKey
-const originalSaveKey = window.saveKey;
-window.saveKey = async function() {
-  const input = document.getElementById('keyInput');
-  const key = input.value.trim();
-  
-  if (!key) {
-    toast('Enter an API key', 'warn');
-    return;
-  }
-  
-  if (!key.startsWith('gsk_')) {
-    toast('Invalid Groq key format', 'err');
-    return;
-  }
-  
-  toast('Validating...');
-  
-  if (await KeyManager.validateKey(key)) {
-    KEY = key;
-    localStorage.setItem('null_groq', key);
-    updateKeyUI();
-    document.getElementById('modalBg').style.display = 'none';
-    toast('Key saved');
-  } else {
-    toast('Invalid API key', 'err');
-  }
-};
-
-// Override openModal to check GitHub first
-const originalOpenModal = window.openModal;
-window.openModal = function() {
-  KeyManager.init();
-};
-
-// Auto-run on load
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => KeyManager.init(), 500);
-});
-
-// Also check on 401 errors
-const originalFetch = window.fetch;
-window.fetch = async function(...args) {
-  const response = await originalFetch(...args);
-  
-  if (args[0]?.includes('groq') && response.status === 401) {
-    setTimeout(() => KeyManager.init(), 100);
-  }
-  
-  return response;
-};
 
 /* ─── MODEL ─── */
 function toggleMdlDD(){
