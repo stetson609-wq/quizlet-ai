@@ -724,6 +724,18 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
   .welcome{padding:32px 14px 24px}
   .welcome h1{font-size:28px}
 }
+
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(16px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 </style>
 </head>
 <body>
@@ -733,27 +745,25 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 <div class="noise"></div>
 
 <!-- Modal -->
-<div class="modal-bg" id="modalBg">
+<div class="modal-bg" id="modalBg" style="display: none;">
   <div class="modal-card">
     <div class="modal-icon">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-      </svg>
+      <img src="https://quizlet.com/favicon.ico" style="width:28px; height:28px; display:block;">
     </div>
     <h2>Connect Groq</h2>
     <p>Your API key is stored only in your browser's localStorage — never transmitted to any server except Groq's directly.</p>
     <div class="modal-input-wrap">
-      <input class="modal-input" id="keyInput" type="password" placeholder="gsk_••••••••••••••••••••••" spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter')saveKey()"/>
-      <button class="modal-eye" id="eyeBtn" onclick="toggleEye()">
+      <input class="modal-input" id="keyInput" type="password" placeholder="gsk_••••••••••••••••••••••" spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter')saveKey()">
+      <button class="modal-eye" id="eyeBtn" onclick="toggleEye()" style="cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
         </svg>
       </button>
     </div>
-    <p class="modal-hint">Get a free key at <a href="https://console.groq.com" target="_blank">console.groq.com</a> — blazing fast inference, generous free tier.</p>
+    <p class="modal-hint" id="autoFillHint">Checking for backup keys...</p>
     <div class="modal-btns">
-      <button class="mbtn-ghost" id="cancelModalBtn" onclick="closeModal()">Later</button>
-      <button class="mbtn-primary" onclick="saveKey()">Save & start chatting →</button>
+      <button class="mbtn-ghost" id="cancelModalBtn" onclick="closeModal()" style="cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">Later</button>
+      <button class="mbtn-primary" onclick="saveKey()" style="cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">Save & start chatting →</button>
     </div>
   </div>
 </div>
@@ -926,6 +936,417 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 </div>
 
 <script>
+
+// Ensure modal exists
+(function() {
+  // Create modal if missing
+  if (!document.getElementById('modalBg')) {
+    const modal = document.createElement('div');
+    modal.id = 'modalBg';
+    modal.className = 'modal-bg';
+    modal.style.display = 'none';
+    modal.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-icon">
+          <img src="https://quizlet.com/favicon.ico" style="width:28px; height:28px; display:block;">
+        </div>
+        <h2>Connect Groq</h2>
+        <p>Your API key is stored only in your browser's localStorage — never transmitted to any server except Groq's directly.</p>
+        <div class="modal-input-wrap">
+          <input class="modal-input" id="keyInput" type="password" placeholder="gsk_••••••••••••••••••••••" spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter')saveKey()">
+          <button class="modal-eye" id="eyeBtn" onclick="toggleEye()" style="cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+        </div>
+        <p class="modal-hint" id="autoFillHint">Checking for backup keys...</p>
+        <div class="modal-btns">
+          <button class="mbtn-ghost" id="cancelModalBtn" onclick="closeModal()" style="cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">Later</button>
+          <button class="mbtn-primary" onclick="saveKey()" style="cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;">Save & start chatting →</button>
+        </div>
+      </div>
+    `;
+    document.body.insertBefore(modal, document.body.firstChild);
+  }
+})();
+
+// Fix API key pill click
+(function() {
+  function fixKeyPill() {
+    const keyPill = document.querySelector('.key-pill');
+    if (!keyPill) {
+      setTimeout(fixKeyPill, 100);
+      return;
+    }
+    
+    // Remove old onclick
+    keyPill.removeAttribute('onclick');
+    
+    // Add new click handler
+    keyPill.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const modal = document.getElementById('modalBg');
+      if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('keyInput').value = KEY || '';
+        setTimeout(() => document.getElementById('keyInput').focus(), 100);
+      }
+    });
+  }
+  
+  fixKeyPill();
+})();
+
+// Fix all modal buttons
+(function() {
+  function fixModalButtons() {
+    const modal = document.getElementById('modalBg');
+    if (!modal) {
+      setTimeout(fixModalButtons, 100);
+      return;
+    }
+    
+    // Fix eye button
+    const eyeBtn = document.getElementById('eyeBtn');
+    if (eyeBtn) {
+      eyeBtn.onclick = function(e) {
+        e.preventDefault();
+        const input = document.getElementById('keyInput');
+        input.type = input.type === 'password' ? 'text' : 'password';
+      };
+    }
+    
+    // Fix save button
+    const saveBtn = document.querySelector('.mbtn-primary');
+    if (saveBtn) {
+      saveBtn.onclick = function(e) {
+        e.preventDefault();
+        const input = document.getElementById('keyInput');
+        const key = input.value.trim();
+        
+        if (!key) {
+          if (typeof toast === 'function') toast('Enter a key', 'warn');
+          return;
+        }
+        
+        if (!key.startsWith('gsk_')) {
+          if (typeof toast === 'function') toast('Invalid format', 'err');
+          return;
+        }
+        
+        KEY = key;
+        localStorage.setItem('null_groq', key);
+        if (typeof updateKeyUI === 'function') updateKeyUI();
+        modal.style.display = 'none';
+        if (typeof toast === 'function') toast('Key saved');
+      };
+    }
+    
+    // Fix cancel button
+    const cancelBtn = document.getElementById('cancelModalBtn');
+    if (cancelBtn) {
+      cancelBtn.onclick = function(e) {
+        e.preventDefault();
+        modal.style.display = 'none';
+      };
+    }
+    
+    // Enter key on input
+    const input = document.getElementById('keyInput');
+    if (input) {
+      input.onkeydown = function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          saveBtn?.click();
+        }
+      };
+    }
+  }
+  
+  fixModalButtons();
+})();
+
+// ULTRA FORCE model dropdown - guaranteed to work
+(function() {
+  function forceModel() {
+    const btn = document.getElementById('mdlBtn');
+    const dd = document.getElementById('mdlDD');
+    
+    if (!btn || !dd) {
+      setTimeout(forceModel, 50);
+      return;
+    }
+    
+    console.log('Model dropdown fixed'); // Debug
+    
+    // COMPLETELY replace the button
+    const newBtn = document.createElement('button');
+    newBtn.id = 'mdlBtn';
+    newBtn.className = btn.className;
+    newBtn.innerHTML = btn.innerHTML;
+    
+    // Replace old button
+    btn.parentNode.replaceChild(newBtn, btn);
+    
+    // Add click event
+    newBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('Clicked'); // Debug
+      
+      if (dd.classList.contains('open')) {
+        dd.classList.remove('open');
+        this.classList.remove('open');
+      } else {
+        dd.classList.add('open');
+        this.classList.add('open');
+      }
+    });
+    
+    // Close on outside click
+    document.addEventListener('click', function(e) {
+      if (!newBtn.contains(e.target) && !dd.contains(e.target)) {
+        dd.classList.remove('open');
+        newBtn.classList.remove('open');
+      }
+    });
+    
+    // Fix options
+    document.querySelectorAll('.mdl-opt').forEach(opt => {
+      opt.addEventListener('click', function(e) {
+        e.stopPropagation();
+        
+        document.querySelectorAll('.mdl-opt').forEach(o => o.classList.remove('sel'));
+        this.classList.add('sel');
+        
+        // Update model
+        if (typeof MODEL !== 'undefined') MODEL = this.dataset.m;
+        document.getElementById('mdlName').textContent = this.dataset.n;
+        
+        dd.classList.remove('open');
+        newBtn.classList.remove('open');
+        
+        if (typeof toast === 'function') toast(this.dataset.n);
+      });
+    });
+  }
+  
+  // Run immediately and multiple times
+  forceModel();
+  setTimeout(forceModel, 200);
+  setTimeout(forceModel, 500);
+})();
+
+
+// Sidebar toggle with original animations
+(function() {
+  function fixToggle() {
+    const menuBtn = document.querySelector('.tb-menu');
+    const sidebar = document.getElementById('sidebar');
+    
+    if (!menuBtn || !sidebar) {
+      setTimeout(fixToggle, 100);
+      return;
+    }
+    
+    // Remove any inline styles that break animations
+    sidebar.style.width = '';
+    sidebar.style.minWidth = '';
+    
+    // Use the original toggleSidebar function
+    menuBtn.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (typeof window.toggleSidebar === 'function') {
+        window.toggleSidebar();
+      } else {
+        // Fallback
+        sidebar.classList.toggle('off');
+      }
+    };
+    
+    // Fix close button
+    const closeBtn = document.querySelector('.sb-close');
+    if (closeBtn) {
+      closeBtn.onclick = function(e) {
+        e.preventDefault();
+        sidebar.classList.add('off');
+      };
+    }
+  }
+  
+  fixToggle();
+})();
+
+// ULTRA INSTANT LEAVE ALERT - RUNS FIRST
+(function() {
+  // Set flag immediately
+  window.__hasChanges = false;
+  
+  // Block navigation instantly
+  window.addEventListener('beforeunload', function(e) {
+    if (window.__hasChanges) {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    }
+  });
+  
+  // Watch for ANY changes ASAP
+  function init() {
+    const msgs = document.getElementById('msgs');
+    if (!msgs) {
+      // Keep trying until it exists
+      requestAnimationFrame(init);
+      return;
+    }
+    
+    // Track changes
+    function checkChanges() {
+      window.__hasChanges = msgs.children.length > 1 || 
+                           (msgs.children.length === 1 && !msgs.querySelector('.welcome'));
+    }
+    
+    // Observe everything
+    new MutationObserver(checkChanges).observe(msgs, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+    
+    // Check on any click/input
+    document.addEventListener('input', checkChanges, true);
+    document.addEventListener('click', checkChanges, true);
+    
+    // Initial check
+    checkChanges();
+  }
+  
+  // Start immediately
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+
+// Smart mobile/responsive manager - drop anywhere
+(function() {
+  const MobileManager = {
+    init() {
+      this.checkMobile();
+      this.setupListeners();
+      this.fixButtons();
+      window.addEventListener('resize', () => this.checkMobile());
+    },
+    
+    checkMobile() {
+      const isMobile = window.innerWidth <= 680;
+      const sidebar = document.getElementById('sidebar');
+      const menuBtn = document.querySelector('.tb-menu');
+      
+      if (isMobile) {
+        // Auto-close sidebar on mobile
+        if (sidebar && !sidebar.classList.contains('off')) {
+          sidebar.classList.add('off');
+        }
+        
+        // Ensure menu button works
+        if (menuBtn) {
+          menuBtn.style.display = 'flex';
+        }
+        
+        // Fix input area
+        this.adjustInput();
+      } else {
+        // Open sidebar on desktop if it was closed
+        if (sidebar && sidebar.classList.contains('off')) {
+          sidebar.classList.remove('off');
+        }
+      }
+      
+      document.body.classList.toggle('mobile', isMobile);
+    },
+    
+    adjustInput() {
+      const input = document.querySelector('.input-area');
+      const sendBtn = document.getElementById('sendBtn');
+      const ta = document.getElementById('ta');
+      
+      if (!input || !sendBtn || !ta) return;
+      
+      // Ensure buttons are tappable
+      sendBtn.style.minHeight = '44px';
+      sendBtn.style.minWidth = '44px';
+      
+      // Fix textarea
+      ta.style.fontSize = '16px'; // Prevents zoom on iOS
+      
+      // Fix foot buttons
+      document.querySelectorAll('.foot-btn').forEach(btn => {
+        btn.style.minHeight = '44px';
+        btn.style.padding = '12px';
+      });
+    },
+    
+    setupListeners() {
+      // Fix touch events
+      document.addEventListener('touchstart', (e) => {
+        // Prevent zoom on double tap
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      // Ensure modals work on mobile
+      const modal = document.getElementById('modalBg');
+      if (modal) {
+        modal.addEventListener('touchmove', (e) => {
+          e.preventDefault();
+        }, { passive: false });
+      }
+    },
+    
+    fixButtons() {
+      // Make all buttons have proper touch targets
+      document.querySelectorAll('button, .conv-row, .starter, .key-pill').forEach(el => {
+        el.style.cursor = 'pointer';
+        el.style.touchAction = 'manipulation';
+        el.style.webkitTapHighlightColor = 'transparent';
+      });
+      
+      // Fix model dropdown on mobile
+      const mdlBtn = document.getElementById('mdlBtn');
+      if (mdlBtn) {
+        mdlBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleMdlDD();
+        });
+      }
+      
+      // Fix sidebar toggle
+      const menuBtn = document.querySelector('.tb-menu');
+      if (menuBtn) {
+        menuBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          toggleSidebar();
+        });
+      }
+    }
+  };
+  
+  // Run when ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => MobileManager.init());
+  } else {
+    MobileManager.init();
+  }
+})();
+
 // Auto-update bot icons - drop anywhere
 (function() {
   const favicon = document.querySelector('link[rel="icon"]')?.href || 'https://quizlet.com/favicon.ico';
@@ -986,7 +1407,7 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
     observer.observe(msgs, { childList: true, subtree: true });
   }
 })();
-  
+
 // Smooth chat manager - tabs, delete, auto-save, butter
 (function() {
   // Wait for app to be ready
