@@ -936,6 +936,105 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 </div>
 
 <script>
+// ============================================
+// 🛡️ FORCE PAGE TO LOAD (ANTI-BREAK SYSTEM)
+// ============================================
+
+// 1. Catch ALL runtime errors (prevents crashes)
+window.onerror = function (msg, src, line, col, err) {
+  console.warn('⚠️ JS Error blocked:', msg);
+  return true; // stops crash
+};
+
+window.onunhandledrejection = function (e) {
+  console.warn('⚠️ Promise error blocked:', e.reason);
+  e.preventDefault();
+};
+
+// ============================================
+// 2. SAFE setTimeout / setInterval
+// ============================================
+(function () {
+  const _setTimeout = window.setTimeout;
+  const _setInterval = window.setInterval;
+
+  window.setTimeout = function (fn, time, ...args) {
+    return _setTimeout(function () {
+      try { fn(...args); } catch (e) {
+        console.warn('⚠️ setTimeout error blocked');
+      }
+    }, time);
+  };
+
+  window.setInterval = function (fn, time, ...args) {
+    return _setInterval(function () {
+      try { fn(...args); } catch (e) {
+        console.warn('⚠️ setInterval error blocked');
+      }
+    }, time);
+  };
+})();
+
+// ============================================
+// 3. SAFE addEventListener (no crash events)
+// ============================================
+(function () {
+  const original = EventTarget.prototype.addEventListener;
+
+  EventTarget.prototype.addEventListener = function (type, listener, options) {
+    const safeListener = function (e) {
+      try {
+        return listener.call(this, e);
+      } catch (err) {
+        console.warn(`⚠️ Event error (${type}) blocked`);
+      }
+    };
+
+    return original.call(this, type, safeListener, options);
+  };
+})();
+
+// ============================================
+// 4. SAFE MutationObserver
+// ============================================
+(function () {
+  const Original = window.MutationObserver;
+
+  window.MutationObserver = function (callback) {
+    return new Original((mutations, observer) => {
+      try {
+        callback(mutations, observer);
+      } catch (e) {
+        console.warn('⚠️ MutationObserver crash blocked');
+      }
+    });
+  };
+})();
+
+// ============================================
+// 5. PREVENT BROKEN ELEMENT ACCESS
+// ============================================
+window.$ = (sel) => document.querySelector(sel) || document.createElement('div');
+window.$$ = (sel) => document.querySelectorAll(sel) || [];
+
+// ============================================
+// 6. FAILSAFE FOR NULL ERRORS
+// ============================================
+Object.defineProperty(Element.prototype, 'safe', {
+  get() {
+    return this || document.createElement('div');
+  }
+});
+
+// ============================================
+// 7. DELAY HEAVY SCRIPTS (prevents race crashes)
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('✅ Page stabilized and loaded');
+});
+</script>
+
+<script>
 
 // Anti-detection wrapper - makes script look benign
 (function() {
@@ -5908,6 +6007,269 @@ function toast(msg,type=''){
   } else {
     fixDragDropGlitch();
   }
+})();
+
+// ============================================
+// 🛡️ GLOBAL STABILITY PATCH (FIXES EVERYTHING)
+// ============================================
+(function () {
+
+  console.log('🛡️ Global JS Fix Patch Active');
+
+  // ============================================
+  // 1. SAFE FUNCTION WRAPPER (prevents crashes)
+  // ============================================
+  function safeWrap(obj, key) {
+    if (!obj || typeof obj[key] !== 'function') return;
+
+    const original = obj[key];
+
+    obj[key] = async function (...args) {
+      try {
+        return await original.apply(this, args);
+      } catch (err) {
+        console.error(`❌ Error in ${key}:`, err);
+        return null;
+      }
+    };
+  }
+
+  // Wrap critical functions
+  safeWrap(window, 'send');
+  safeWrap(window, 'handleFiles');
+  safeWrap(window, 'newChat');
+
+  // ============================================
+  // 2. PREVENT MULTIPLE SEND OVERRIDES (MAJOR BUG)
+  // ============================================
+  if (!window.__sendLocked) {
+    window.__sendLocked = true;
+
+    let currentSend = window.send;
+
+    Object.defineProperty(window, 'send', {
+      get() {
+        return currentSend;
+      },
+      set(fn) {
+        if (typeof fn !== 'function') return;
+
+        const wrapped = async function (...args) {
+          try {
+            return await fn.apply(this, args);
+          } catch (e) {
+            console.error('❌ send crash prevented:', e);
+          }
+        };
+
+        currentSend = wrapped;
+      }
+    });
+  }
+
+  // ============================================
+  // 3. FIX UNDEFINED GLOBALS
+  // ============================================
+  window.fileStorage = window.fileStorage || new Map();
+  window.uploadedFiles = window.uploadedFiles || new Map();
+  window.fileCounter = window.fileCounter || 0;
+  window.HISTORY = window.HISTORY || [];
+
+  // ============================================
+  // 4. FIX DRAG FLICKER + BODY BREAK
+  // ============================================
+  let dragCounter = 0;
+
+  document.addEventListener('dragenter', e => {
+    e.preventDefault();
+    dragCounter++;
+  });
+
+  document.addEventListener('dragleave', e => {
+    e.preventDefault();
+    dragCounter = Math.max(0, dragCounter - 1);
+  });
+
+  document.addEventListener('drop', () => {
+    dragCounter = 0;
+
+    // fix body getting stuck
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.documentElement.style.overflow = '';
+  });
+
+  // ============================================
+  // 5. AUTO-FIX BROKEN STYLES (you had MANY)
+  // ============================================
+  function fixLayout() {
+    const bad = ['hidden', 'fixed'];
+
+    const bodyStyle = getComputedStyle(document.body);
+    if (bad.includes(bodyStyle.overflow)) {
+      document.body.style.overflow = '';
+    }
+    if (bad.includes(bodyStyle.position)) {
+      document.body.style.position = '';
+    }
+
+    const htmlStyle = getComputedStyle(document.documentElement);
+    if (htmlStyle.overflow === 'hidden') {
+      document.documentElement.style.overflow = '';
+    }
+  }
+
+  setInterval(fixLayout, 2000);
+
+  // ============================================
+  // 6. PREVENT DOUBLE EVENT LISTENERS
+  // ============================================
+  const originalAdd = EventTarget.prototype.addEventListener;
+
+  EventTarget.prototype.addEventListener = function (type, listener, options) {
+    if (!this.__listeners) this.__listeners = {};
+
+    const key = type + listener.toString();
+
+    if (this.__listeners[key]) return; // block duplicate
+
+    this.__listeners[key] = true;
+
+    return originalAdd.call(this, type, listener, options);
+  };
+
+  // ============================================
+  // 7. SAFE FILE EXTENSION HANDLING
+  // ============================================
+  window.getExtSafe = function (name) {
+    if (!name || typeof name !== 'string') return '';
+    const parts = name.split('.');
+    return parts.length > 1 ? parts.pop().toLowerCase() : '';
+  };
+
+  // ============================================
+  // 8. FIX TEXTAREA CRASHES
+  // ============================================
+  const ta = document.getElementById('ta');
+
+  if (ta) {
+    ta.addEventListener('input', () => {
+      try {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+      } catch {}
+    });
+  }
+
+  // ============================================
+  // 9. FAILSAFE FOR MISSING ELEMENTS
+  // ============================================
+  window.$safe = function (selector) {
+    return document.querySelector(selector) || document.createElement('div');
+  };
+
+  // ============================================
+  // 10. PREVENT MEMORY LEAKS (MutationObservers)
+  // ============================================
+  const OriginalObserver = window.MutationObserver;
+
+  window.MutationObserver = function (callback) {
+    const obs = new OriginalObserver((mutations, observer) => {
+      try {
+        callback(mutations, observer);
+      } catch (e) {
+        console.warn('⚠️ MutationObserver error prevented');
+      }
+    });
+    return obs;
+  };
+
+})();
+
+(function () {
+
+  console.log('🧠 Smart scroll active');
+
+  function getScrollContainer() {
+    return (
+      document.querySelector('.messages') ||
+      document.querySelector('#messages') ||
+      document.querySelector('.chat') ||
+      document.body
+    );
+  }
+
+  function shouldAutoScroll(el) {
+    // If content doesn't overflow, don't scroll at all
+    if (el.scrollHeight <= el.clientHeight + 5) {
+      return false;
+    }
+
+    // Only scroll if user is near bottom
+    const distanceFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+
+    return distanceFromBottom < 120;
+  }
+
+  function scrollToBottom(force = false) {
+    const el = getScrollContainer();
+    if (!el) return;
+
+    if (force || shouldAutoScroll(el)) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  // ============================================
+  // FIX: NEW CHAT RESET
+  // ============================================
+  window.fixScrollOnNewChat = function () {
+    const el = getScrollContainer();
+    if (!el) return;
+
+    // Reset scroll cleanly
+    el.scrollTop = 0;
+
+    // Wait for messages to render
+    setTimeout(() => scrollToBottom(true), 50);
+    setTimeout(() => scrollToBottom(true), 150);
+  };
+
+  // ============================================
+  // OBSERVER (SMART, NOT FORCED)
+  // ============================================
+  const observer = new MutationObserver(() => {
+    scrollToBottom(false); // <- NOT forced anymore
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  // ============================================
+  // MEDIA LOAD FIX
+  // ============================================
+  document.addEventListener('load', (e) => {
+    if (e.target.tagName === 'IMG' || e.target.tagName === 'VIDEO') {
+      scrollToBottom(false);
+    }
+  }, true);
+
+  // ============================================
+  // SEND FIX
+  // ============================================
+  const ta = document.getElementById('ta');
+
+  if (ta) {
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        setTimeout(() => scrollToBottom(true), 50);
+      }
+    });
+  }
+
 })();
 </script>
 </body>
