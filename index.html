@@ -3795,6 +3795,2120 @@ function toast(msg,type=''){
   setTimeout(forceSidebar, 600);
   setTimeout(forceSidebar, 1000);
 })();
+
+// SMART INPUT ENHANCEMENT - Auto-expand, better UX, mobile friendly
+(function() {
+  function enhanceInput() {
+    const textarea = document.getElementById('ta');
+    const sendBtn = document.getElementById('sendBtn');
+    const inputShell = document.querySelector('.input-shell');
+    const footR = document.querySelector('.foot-r');
+    
+    if (!textarea || !sendBtn) {
+      setTimeout(enhanceInput, 200);
+      return;
+    }
+    
+    // ============================================
+    // 1. AUTO-EXPAND TEXTAREA (better than original)
+    // ============================================
+    function autoGrow() {
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(textarea.scrollHeight, 200);
+      textarea.style.height = newHeight + 'px';
+      
+      // Add class if multi-line
+      if (textarea.value.includes('\n') || textarea.scrollHeight > 60) {
+        textarea.classList.add('multi-line');
+      } else {
+        textarea.classList.remove('multi-line');
+      }
+      
+      // Enable/disable send button
+      sendBtn.disabled = !textarea.value.trim();
+    }
+    
+    // Replace original grow function
+    window.grow = autoGrow;
+    
+    // Initial call
+    autoGrow();
+    
+    // ============================================
+    // 2. BETTER KEY HANDLING
+    // ============================================
+    window.taKey = function(e) {
+      if (e.key === 'Enter') {
+        if (e.shiftKey) {
+          // Shift+Enter = new line (default)
+          return;
+        } else {
+          // Enter = send
+          e.preventDefault();
+          if (!sendBtn.disabled) {
+            window.send();
+          }
+        }
+      }
+    };
+    
+    // ============================================
+    // 3. ADD CHARACTER COUNT FOR LONG MESSAGES
+    // ============================================
+    const charCount = document.createElement('span');
+    charCount.className = 'char-count';
+    charCount.style.cssText = `
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      margin-left: 8px;
+      transition: color 0.2s;
+    `;
+    
+    function updateCharCount() {
+      const len = textarea.value.length;
+      if (len > 0) {
+        charCount.textContent = len;
+        if (len > 2000) {
+          charCount.style.color = '#ff6b6b';
+        } else if (len > 1000) {
+          charCount.style.color = '#ffd93d';
+        } else {
+          charCount.style.color = 'rgba(255,255,255,0.3)';
+        }
+      } else {
+        charCount.textContent = '';
+      }
+    }
+    
+    textarea.addEventListener('input', () => {
+      autoGrow();
+      updateCharCount();
+    });
+    
+    // Add to footer
+    footR.appendChild(charCount);
+    
+    // ============================================
+    // 4. ADD PASTE HANDLER (clean formatting)
+    // ============================================
+    textarea.addEventListener('paste', function(e) {
+      e.preventDefault();
+      
+      // Get plain text only
+      let text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      
+      // Clean up excessive whitespace
+      text = text.replace(/\r\n/g, '\n').replace(/\t/g, '  ');
+      
+      // Insert at cursor position
+      const start = this.selectionStart;
+      const end = this.selectionEnd;
+      this.value = this.value.substring(0, start) + text + this.value.substring(end);
+      
+      // Move cursor to end of pasted text
+      this.selectionStart = this.selectionEnd = start + text.length;
+      
+      // Trigger auto-grow
+      autoGrow();
+      updateCharCount();
+    });
+    
+    // ============================================
+    // 5. ADD FOCUS EFFECTS
+    // ============================================
+    textarea.addEventListener('focus', () => {
+      inputShell.classList.add('focused');
+    });
+    
+    textarea.addEventListener('blur', () => {
+      inputShell.classList.remove('focused');
+    });
+    
+    // ============================================
+    // 6. ADD SEND SHORTCUT HINT
+    // ============================================
+    const sendHint = document.createElement('span');
+    sendHint.className = 'send-hint';
+    sendHint.style.cssText = `
+      font-size: 10px;
+      color: rgba(255,255,255,0.2);
+      margin-left: 8px;
+    `;
+    sendHint.textContent = '⏎ send';
+    footR.appendChild(sendHint);
+    
+    // ============================================
+    // 7. ADD CLEAR BUTTON (when typing)
+    // ============================================
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'input-clear';
+    clearBtn.innerHTML = '✕';
+    clearBtn.style.cssText = `
+      position: absolute;
+      right: 70px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.5);
+      font-size: 14px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      z-index: 5;
+    `;
+    
+    clearBtn.addEventListener('click', () => {
+      textarea.value = '';
+      autoGrow();
+      updateCharCount();
+      textarea.focus();
+    });
+    
+    clearBtn.addEventListener('mouseenter', () => {
+      clearBtn.style.background = 'rgba(255,255,255,0.2)';
+      clearBtn.style.color = '#fff';
+    });
+    
+    clearBtn.addEventListener('mouseleave', () => {
+      clearBtn.style.background = 'rgba(255,255,255,0.1)';
+      clearBtn.style.color = 'rgba(255,255,255,0.5)';
+    });
+    
+    // Add to ta-row
+    const taRow = document.querySelector('.ta-row');
+    if (taRow) {
+      taRow.style.position = 'relative';
+      taRow.appendChild(clearBtn);
+    }
+    
+    // Show/hide clear button
+    textarea.addEventListener('input', () => {
+      clearBtn.style.display = textarea.value.trim() ? 'flex' : 'none';
+    });
+    
+    // ============================================
+    // 8. ADD CSS ANIMATIONS
+    // ============================================
+    const style = document.createElement('style');
+    style.textContent = `
+      .input-shell {
+        transition: border-color 0.2s, box-shadow 0.2s, transform 0.1s;
+      }
+      
+      .input-shell.focused {
+        border-color: rgba(255,255,255,0.25) !important;
+        box-shadow: 0 0 0 3px rgba(255,255,255,0.05), 0 4px 32px rgba(0,0,0,0.6) !important;
+      }
+      
+      .send {
+        transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      
+      .send:not(:disabled):hover {
+        transform: scale(1.1);
+        background: #ffffff;
+      }
+      
+      .send:not(:disabled):active {
+        transform: scale(0.95);
+      }
+      
+      .send:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      
+      .char-count {
+        font-family: 'Syne Mono', monospace;
+      }
+      
+      .send-hint {
+        font-family: 'Syne Mono', monospace;
+      }
+      
+      @media (max-width: 680px) {
+        .input-clear {
+          right: 80px !important;
+          width: 36px !important;
+          height: 36px !important;
+        }
+        
+        .send-hint {
+          display: none;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // ============================================
+    // 9. ADD DRAG-DROP SUPPORT
+    // ============================================
+    inputShell.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      inputShell.style.borderColor = 'rgba(255,255,255,0.4)';
+      inputShell.style.background = 'rgba(255,255,255,0.05)';
+    });
+    
+    inputShell.addEventListener('dragleave', () => {
+      inputShell.style.borderColor = '';
+      inputShell.style.background = '';
+    });
+    
+    inputShell.addEventListener('drop', (e) => {
+      e.preventDefault();
+      inputShell.style.borderColor = '';
+      inputShell.style.background = '';
+      
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        // Handle file drop if file upload exists
+        if (window.uploadSystem && typeof window.uploadSystem.processFiles === 'function') {
+          window.uploadSystem.processFiles(Array.from(files));
+        } else {
+          // Just add filename as text
+          textarea.value += `\n[File: ${files[0].name}]`;
+          autoGrow();
+        }
+      }
+    });
+    
+    // ============================================
+    // 10. ADD AUTO-SAVE DRAFT
+    // ============================================
+    const draftKey = 'chat_draft_' + (window.currentId || 'new');
+    
+    // Load draft
+    const savedDraft = localStorage.getItem(draftKey);
+    if (savedDraft && !textarea.value) {
+      textarea.value = savedDraft;
+      autoGrow();
+      updateCharCount();
+    }
+    
+    // Save draft on input
+    textarea.addEventListener('input', () => {
+      const currentDraftKey = 'chat_draft_' + (window.currentId || 'new');
+      if (textarea.value.trim()) {
+        localStorage.setItem(currentDraftKey, textarea.value);
+      } else {
+        localStorage.removeItem(currentDraftKey);
+      }
+    });
+    
+    // Clear draft on send
+    const originalSend = window.send;
+    window.send = function() {
+      if (textarea.value.trim()) {
+        const result = originalSend.apply(this, arguments);
+        localStorage.removeItem('chat_draft_' + (window.currentId || 'new'));
+        return result;
+      }
+    };
+    
+    console.log('✅ Input area enhanced');
+  }
+  
+  // Initialize
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', enhanceInput);
+  } else {
+    enhanceInput();
+  }
+})();
+
+// FILE PROCESSING FIX - AI can actually read files
+(function() {
+  function fixFileReading() {
+    // ============================================
+    // OVERRIDE SEND FUNCTION TO INCLUDE FILE CONTENTS
+    // ============================================
+    const originalSend = window.send;
+    
+    if (!originalSend) {
+      setTimeout(fixFileReading, 500);
+      return;
+    }
+    
+    window.send = async function() {
+      const textarea = document.getElementById('ta');
+      const message = textarea.value;
+      
+      // Check for file references
+      const fileRefs = message.match(/\[.*?File ID: (file_\d+_\d+)\].*?\]/g);
+      
+      if (fileRefs && fileRefs.length > 0) {
+        // Show processing indicator
+        const typingDiv = appendTyping?.();
+        
+        // Build enhanced message with actual file contents
+        let enhancedMessage = message;
+        
+        for (const ref of fileRefs) {
+          const match = ref.match(/File ID: (file_\d+_\d+)/);
+          if (match) {
+            const fileId = match[1];
+            const fileData = window.uploadedFiles?.get(fileId);
+            
+            if (fileData) {
+              try {
+                // Read file content
+                const content = await readFileContent(fileData.file);
+                
+                // Replace reference with actual content
+                const fileType = fileData.type;
+                const fileName = fileData.name;
+                const fileExt = fileName.split('.').pop();
+                
+                let fileContent = '';
+                
+                if (fileType.startsWith('image/')) {
+                  // Images become markdown
+                  fileContent = `\n![${fileName}](${content})\n`;
+                } 
+                else if (fileType.startsWith('text/') || 
+                         ['js','py','html','css','json','md','txt','jsx','tsx','php','rb','go','rs','xml','yaml','csv'].includes(fileExt)) {
+                  // Code/text files become code blocks
+                  fileContent = `\n\`\`\`${fileExt}\n${content}\n\`\`\`\n`;
+                }
+                else {
+                  // Binary files get metadata
+                  fileContent = `\n[File: ${fileName} (${(fileData.file.size / 1024).toFixed(1)}KB) - Binary data cannot be displayed]\n`;
+                }
+                
+                enhancedMessage = enhancedMessage.replace(ref, fileContent);
+                
+              } catch (err) {
+                console.error('Failed to read file:', err);
+                enhancedMessage = enhancedMessage.replace(ref, `\n[Error reading file: ${fileData.name}]\n`);
+              }
+            }
+          }
+        }
+        
+        // Replace textarea value temporarily
+        textarea.value = enhancedMessage;
+        
+        // Remove typing indicator
+        if (typingDiv) typingDiv.remove();
+      }
+      
+      // Call original send
+      return originalSend.apply(this, arguments);
+    };
+    
+    // Helper to read file content
+    function readFileContent(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(e);
+        
+        if (file.type.startsWith('image/')) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      });
+    }
+    
+    console.log('✅ File reading fixed - AI can now see file contents');
+  }
+  
+  // Initialize
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixFileReading);
+  } else {
+    fixFileReading();
+  }
+})();
+
+// COMPLETE FILE UPLOAD SYSTEM - AI reads everything
+(function() {
+  function initFileSystem() {
+    const textarea = document.getElementById('ta');
+    const inputShell = document.querySelector('.input-shell');
+    
+    if (!textarea || !inputShell) {
+      setTimeout(initFileSystem, 200);
+      return;
+    }
+    
+    // ============================================
+    // FILE STORAGE
+    // ============================================
+    window.fileStorage = new Map();
+    let fileCounter = 0;
+    
+    // ============================================
+    // DROP ZONE
+    // ============================================
+    const dropZone = document.createElement('div');
+    dropZone.id = 'file-drop-zone';
+    dropZone.innerHTML = `
+      <div class="drop-content">
+        <div class="drop-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <div class="drop-title">Drop files anywhere</div>
+        <div class="drop-subtitle">Files will be read and sent to AI</div>
+      </div>
+    `;
+    
+    dropZone.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.95);
+      backdrop-filter: blur(16px);
+      border: 2px dashed #00ff88;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    `;
+    
+    const dropContent = dropZone.querySelector('.drop-content');
+    dropContent.style.cssText = `
+      text-align: center;
+      padding: 40px;
+      background: #0a0a0a;
+      border-radius: 32px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+    `;
+    
+    dropZone.querySelector('.drop-icon').style.cssText = `
+      width: 96px;
+      height: 96px;
+      margin: 0 auto 24px;
+      background: rgba(0,255,136,0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #00ff88;
+      animation: float 3s ease infinite;
+    `;
+    
+    dropZone.querySelector('.drop-title').style.cssText = `
+      font-size: 28px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 12px;
+    `;
+    
+    dropZone.querySelector('.drop-subtitle').style.cssText = `
+      font-size: 16px;
+      color: rgba(255,255,255,0.5);
+    `;
+    
+    document.body.appendChild(dropZone);
+    
+    // ============================================
+    // DRAG DETECTION
+    // ============================================
+    let dragCounter = 0;
+    
+    document.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      if (dragCounter === 1) {
+        dropZone.style.display = 'flex';
+        setTimeout(() => dropZone.style.opacity = '1', 10);
+      }
+    });
+    
+    document.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter === 0) {
+        dropZone.style.opacity = '0';
+        setTimeout(() => dropZone.style.display = 'none', 200);
+      }
+    });
+    
+    document.addEventListener('dragover', (e) => e.preventDefault());
+    
+    // ============================================
+    // FILE PROCESSING
+    // ============================================
+    async function readFileContent(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(e);
+        
+        if (file.type.startsWith('image/')) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      });
+    }
+    
+    function getFileIcon(fileName) {
+      const ext = fileName.split('.').pop().toLowerCase();
+      const icons = {
+        'html': '🌐', 'css': '🎨', 'js': '⚙️', 'py': '🐍', 'json': '📋',
+        'txt': '📄', 'md': '📝', 'pdf': '📕', 'jpg': '🖼️', 'png': '🖼️',
+        'gif': '🎞️', 'svg': '✨', 'mp4': '🎬', 'mp3': '🎵', 'zip': '📦'
+      };
+      return icons[ext] || '📎';
+    }
+    
+    // ============================================
+    // HANDLE DROP
+    // ============================================
+    dropZone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      
+      dropZone.style.opacity = '0';
+      setTimeout(() => dropZone.style.display = 'none', 200);
+      dragCounter = 0;
+      
+      const files = Array.from(e.dataTransfer.files);
+      
+      for (const file of files) {
+        try {
+          const fileId = `file_${Date.now()}_${fileCounter++}`;
+          const content = await readFileContent(file);
+          const icon = getFileIcon(file.name);
+          const size = (file.size / 1024).toFixed(1);
+          
+          // Store file
+          window.fileStorage.set(fileId, {
+            name: file.name,
+            content: content,
+            type: file.type,
+            size: size,
+            icon: icon
+          });
+          
+          // Insert at cursor
+          let insertText = '';
+          
+          if (file.type.startsWith('image/')) {
+            insertText = `\n![${file.name}](${content})\n`;
+          } 
+          else if (file.type.startsWith('text/') || 
+                   ['js','py','html','css','json','md','txt'].includes(file.name.split('.').pop())) {
+            const ext = file.name.split('.').pop();
+            insertText = `\n\`\`\`${ext}\n${content}\n\`\`\`\n`;
+          }
+          else {
+            insertText = `\n[${icon} ${file.name} (${size}KB)]\n${content}\n`;
+          }
+          
+          if (textarea.selectionStart || textarea.selectionStart === 0) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + 
+                            (start > 0 ? '\n' : '') + insertText + 
+                            textarea.value.substring(end);
+          } else {
+            textarea.value += (textarea.value ? '\n' : '') + insertText;
+          }
+          
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          
+          // Show success
+          showToast(`✓ ${file.name} loaded`, 'success');
+          
+        } catch (err) {
+          showToast(`✗ Failed: ${file.name}`, 'error');
+        }
+      }
+    });
+    
+    // ============================================
+    // PAPERCLIP BUTTON
+    // ============================================
+    const sendBtn = document.getElementById('sendBtn');
+    if (sendBtn) {
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+      
+      const taRow = document.querySelector('.ta-row');
+      if (taRow) {
+        taRow.appendChild(wrapper);
+        wrapper.appendChild(sendBtn);
+      }
+      
+      const clipBtn = document.createElement('button');
+      clipBtn.type = 'button';
+      clipBtn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+        </svg>
+      `;
+      
+      clipBtn.style.cssText = `
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.4);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+      `;
+      
+      clipBtn.addEventListener('mouseenter', () => {
+        clipBtn.style.background = 'rgba(0,255,136,0.1)';
+        clipBtn.style.borderColor = '#00ff88';
+        clipBtn.style.color = '#00ff88';
+      });
+      
+      clipBtn.addEventListener('mouseleave', () => {
+        clipBtn.style.background = 'transparent';
+        clipBtn.style.borderColor = 'rgba(255,255,255,0.1)';
+        clipBtn.style.color = 'rgba(255,255,255,0.4)';
+      });
+      
+      clipBtn.addEventListener('click', async () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = '*/*';
+        
+        input.onchange = async (e) => {
+          const files = Array.from(e.target.files);
+          
+          for (const file of files) {
+            try {
+              const content = await readFileContent(file);
+              const icon = getFileIcon(file.name);
+              const size = (file.size / 1024).toFixed(1);
+              
+              let insertText = '';
+              
+              if (file.type.startsWith('image/')) {
+                insertText = `\n![${file.name}](${content})\n`;
+              }
+              else if (file.type.startsWith('text/') || 
+                       ['js','py','html','css','json','md','txt'].includes(file.name.split('.').pop())) {
+                const ext = file.name.split('.').pop();
+                insertText = `\n\`\`\`${ext}\n${content}\n\`\`\`\n`;
+              }
+              else {
+                insertText = `\n[${icon} ${file.name} (${size}KB)]\n${content}\n`;
+              }
+              
+              textarea.value += (textarea.value ? '\n' : '') + insertText;
+              textarea.dispatchEvent(new Event('input', { bubbles: true }));
+              showToast(`✓ ${file.name} loaded`, 'success');
+              
+            } catch (err) {
+              showToast(`✗ Failed: ${file.name}`, 'error');
+            }
+          }
+        };
+        
+        input.click();
+      });
+      
+      wrapper.insertBefore(clipBtn, sendBtn);
+    }
+    
+    // ============================================
+    // TOAST NOTIFICATION
+    // ============================================
+    function showToast(msg, type) {
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: ${type === 'success' ? '#00c853' : '#ff4444'};
+        color: white;
+        padding: 12px 24px;
+        border-radius: 40px;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        z-index: 1000000;
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        border: 1px solid rgba(255,255,255,0.2);
+      `;
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => toast.style.transform = 'translateX(-50%) translateY(0)', 10);
+      setTimeout(() => {
+        toast.style.transform = 'translateX(-50%) translateY(100px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+    
+    // ============================================
+    // ANIMATIONS
+    // ============================================
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+      }
+      #file-drop-zone {
+        animation: fadeIn 0.2s ease;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    console.log('✅ Complete file system ready - AI reads everything');
+  }
+  
+  // Start
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initFileSystem);
+  } else {
+    initFileSystem();
+  }
+})();
+
+// FIX CLEAR BUTTON POSITION - Left of attach file, clean UI
+(function() {
+  function fixButtonLayout() {
+    const taRow = document.querySelector('.ta-row');
+    const sendBtn = document.getElementById('sendBtn');
+    const paperclip = document.querySelector('.paperclip-btn, .premium-clip-btn, .file-attach-btn');
+    
+    if (!taRow || !sendBtn) {
+      setTimeout(fixButtonLayout, 200);
+      return;
+    }
+    
+    // Find or create wrapper
+    let wrapper = taRow.querySelector('.button-group');
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.className = 'button-group';
+      wrapper.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+      `;
+      
+      // Move send button into wrapper
+      if (sendBtn.parentNode === taRow) {
+        taRow.appendChild(wrapper);
+        wrapper.appendChild(sendBtn);
+      } else if (sendBtn.parentNode && sendBtn.parentNode !== wrapper) {
+        // Send button might be in another wrapper
+        const parent = sendBtn.parentNode;
+        taRow.appendChild(wrapper);
+        wrapper.appendChild(sendBtn);
+        if (parent && parent !== wrapper && parent.children.length === 0) {
+          parent.remove();
+        }
+      }
+    }
+    
+    // Create clear button if it doesn't exist
+    let clearBtn = document.getElementById('input-clear-btn');
+    if (!clearBtn) {
+      clearBtn = document.createElement('button');
+      clearBtn.id = 'input-clear-btn';
+      clearBtn.type = 'button';
+      clearBtn.className = 'input-clear-btn';
+      clearBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+          <path d="M10 11v5M14 11v5"/>
+        </svg>
+      `;
+      
+      clearBtn.title = "Clear chat";
+      clearBtn.style.cssText = `
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.4);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        order: -1;
+      `;
+      
+      // Hover effect
+      clearBtn.addEventListener('mouseenter', () => {
+        clearBtn.style.background = 'rgba(255,80,80,0.1)';
+        clearBtn.style.borderColor = 'rgba(255,80,80,0.3)';
+        clearBtn.style.color = '#ff6b6b';
+      });
+      
+      clearBtn.addEventListener('mouseleave', () => {
+        clearBtn.style.background = 'transparent';
+        clearBtn.style.borderColor = 'rgba(255,255,255,0.1)';
+        clearBtn.style.color = 'rgba(255,255,255,0.4)';
+      });
+      
+      // Click handler
+      clearBtn.addEventListener('click', () => {
+        if (typeof window.clearCurrentChat === 'function') {
+          window.clearCurrentChat();
+        } else {
+          // Fallback clear
+          const textarea = document.getElementById('ta');
+          if (textarea) textarea.value = '';
+          const msgs = document.getElementById('msgs');
+          if (msgs) {
+            msgs.innerHTML = '';
+            // Try to show welcome
+            if (typeof makeWelcomeEl === 'function') {
+              msgs.appendChild(makeWelcomeEl());
+            }
+          }
+        }
+        showClearToast();
+      });
+    }
+    
+    // Ensure clear button is first in wrapper
+    if (wrapper.firstChild !== clearBtn) {
+      wrapper.insertBefore(clearBtn, wrapper.firstChild);
+    }
+    
+    // Ensure paperclip is second (if exists)
+    if (paperclip && paperclip.parentNode !== wrapper) {
+      wrapper.insertBefore(paperclip, sendBtn);
+    }
+    
+    // Hide clear button when no messages
+    function updateClearVisibility() {
+      const msgs = document.getElementById('msgs');
+      if (!msgs || !clearBtn) return;
+      
+      const hasMessages = msgs.children.length > 0 && 
+                         !msgs.querySelector('.welcome');
+      clearBtn.style.display = hasMessages ? 'flex' : 'none';
+    }
+    
+    // Observe for message changes
+    const msgs = document.getElementById('msgs');
+    if (msgs) {
+      const observer = new MutationObserver(updateClearVisibility);
+      observer.observe(msgs, { childList: true, subtree: true });
+      updateClearVisibility();
+    }
+    
+    // Toast notification
+    function showClearToast() {
+      const toast = document.getElementById('toastZone');
+      if (!toast) return;
+      
+      const msg = document.createElement('div');
+      msg.className = 'toast';
+      msg.textContent = 'Chat cleared';
+      msg.style.cssText = `
+        background: rgba(30,30,30,0.95);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 40px;
+        padding: 10px 20px;
+        color: #fff;
+        font-size: 13px;
+        animation: slideUp 0.2s ease;
+      `;
+      toast.appendChild(msg);
+      
+      setTimeout(() => {
+        msg.style.opacity = '0';
+        msg.style.transform = 'translateY(10px)';
+        msg.style.transition = 'all 0.2s';
+        setTimeout(() => msg.remove(), 200);
+      }, 2000);
+    }
+    
+    // Add animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      
+      .input-clear-btn svg {
+        transition: transform 0.2s ease;
+      }
+      
+      .input-clear-btn:hover svg {
+        transform: scale(0.9);
+      }
+      
+      .button-group {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    console.log('✅ Clear button positioned left of attach file');
+  }
+  
+  // Run
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixButtonLayout);
+  } else {
+    fixButtonLayout();
+  }
+})();
+
+// FIX STORAGE QUOTA + REMOVE OLD CLEAR BUTTON
+(function() {
+  function fixStorageIssues() {
+    
+    // ============================================
+    // 1. REMOVE THE OLD CLEAR BUTTON
+    // ============================================
+    const oldClearBtn = document.querySelector('.input-clear');
+    if (oldClearBtn) {
+      oldClearBtn.remove();
+      console.log('✅ Removed old clear button');
+    }
+    
+    // Watch for it being re-added
+    const observer = new MutationObserver(() => {
+      const btn = document.querySelector('.input-clear');
+      if (btn) btn.remove();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    // ============================================
+    // 2. FIX STORAGE QUOTA ISSUES
+    // ============================================
+    
+    // Override ChatStorage with size limits
+    const ChatStorage = {
+      key: 'quizlet_chats',
+      maxSize: 4 * 1024 * 1024, // 4MB limit (safe under 5MB quota)
+      
+      save(sessions, currentId) {
+        try {
+          // Clean sessions - remove file data and limit history
+          const cleanSessions = (sessions || []).map(s => ({
+            id: s.id,
+            title: (s.title || 'New chat').substring(0, 100),
+            ts: s.ts || Date.now(),
+            history: (s.history || []).slice(-10).map(m => ({  // Keep only last 10 messages
+              role: m.role,
+              content: (m.content || '').substring(0, 2000) // Limit message length
+            }))
+          })).slice(-20); // Keep only last 20 sessions
+          
+          const data = { sessions: cleanSessions, currentId };
+          const json = JSON.stringify(data);
+          
+          // Check size before saving
+          if (json.length > this.maxSize) {
+            console.warn('Data too large, truncating further');
+            // Truncate more aggressively
+            const truncated = {
+              sessions: cleanSessions.map(s => ({
+                ...s,
+                history: s.history.slice(-5).map(m => ({
+                  ...m,
+                  content: m.content.substring(0, 500)
+                }))
+              })).slice(-10),
+              currentId
+            };
+            localStorage.setItem(this.key, JSON.stringify(truncated));
+          } else {
+            localStorage.setItem(this.key, json);
+          }
+        } catch (e) {
+          console.warn('Save failed, clearing old chats');
+          // If still failing, clear completely
+          localStorage.removeItem(this.key);
+          // Try one more time with empty
+          try {
+            localStorage.setItem(this.key, JSON.stringify({ sessions: [], currentId: null }));
+          } catch (err) {
+            // Give up
+          }
+        }
+      },
+      
+      load() {
+        try {
+          const raw = localStorage.getItem(this.key);
+          if (!raw) return { sessions: [], currentId: null };
+          
+          // Check if too large
+          if (raw.length > this.maxSize) {
+            localStorage.removeItem(this.key);
+            return { sessions: [], currentId: null };
+          }
+          
+          return JSON.parse(raw);
+        } catch {
+          return { sessions: [], currentId: null };
+        }
+      }
+    };
+    
+    // ============================================
+    // 3. OVERRIDE newChat AND send FUNCTIONS
+    // ============================================
+    
+    // Store original functions
+    const originalNewChat = window.newChat;
+    const originalSend = window.send;
+    
+    // Override newChat
+    window.newChat = function() {
+      if (typeof originalNewChat === 'function') {
+        originalNewChat();
+      } else {
+        // Fallback
+        if (typeof clearCurrentChat === 'function') clearCurrentChat();
+      }
+      
+      // Save with size limits
+      setTimeout(() => {
+        try {
+          ChatStorage.save(window.sessions || [], window.currentId);
+        } catch (e) {
+          console.warn('Auto-save failed');
+        }
+      }, 100);
+    };
+    
+    // Override send
+    window.send = async function() {
+      if (typeof originalSend === 'function') {
+        await originalSend();
+      }
+      
+      // Save with size limits
+      try {
+        ChatStorage.save(window.sessions || [], window.currentId);
+      } catch (e) {
+        console.warn('Auto-save failed after send');
+      }
+    };
+    
+    // Override clearCurrentChat
+    const originalClear = window.clearCurrentChat;
+    window.clearCurrentChat = function() {
+      if (typeof originalClear === 'function') {
+        originalClear();
+      }
+      
+      // Save empty
+      try {
+        ChatStorage.save([], null);
+      } catch (e) {
+        console.warn('Clear save failed');
+      }
+    };
+    
+    // ============================================
+    // 4. CLEAN UP ON LOAD
+    // ============================================
+    function cleanStorage() {
+      try {
+        // Check existing storage size
+        const raw = localStorage.getItem(ChatStorage.key);
+        if (raw && raw.length > ChatStorage.maxSize) {
+          localStorage.removeItem(ChatStorage.key);
+          console.log('✅ Removed oversized storage');
+        }
+        
+        // Load saved data
+        const saved = ChatStorage.load();
+        if (saved.sessions && saved.sessions.length) {
+          window.sessions = saved.sessions;
+          window.currentId = saved.currentId;
+          
+          // Update UI if functions exist
+          if (typeof renderSessions === 'function') renderSessions();
+          
+          if (window.currentId) {
+            const current = saved.sessions.find(s => s.id === window.currentId);
+            if (current && typeof rebuildMsgs === 'function') {
+              window.HISTORY = current.history ? [...current.history] : [];
+              rebuildMsgs(current);
+              if (typeof setTitle === 'function') setTitle(current.title);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Storage cleanup failed');
+      }
+    }
+    
+    // Run cleanup
+    cleanStorage();
+    
+    // ============================================
+    // 5. ADD SIZE WARNING TOAST
+    // ============================================
+    function showStorageWarning() {
+      const toast = document.getElementById('toastZone');
+      if (!toast) return;
+      
+      const msg = document.createElement('div');
+      msg.className = 'toast';
+      msg.textContent = '⚠️ Chat history trimmed due to storage limits';
+      msg.style.cssText = `
+        background: rgba(255, 180, 0, 0.2);
+        border: 1px solid rgba(255, 180, 0, 0.3);
+        color: #ffb700;
+        border-radius: 40px;
+        padding: 8px 16px;
+        font-size: 12px;
+      `;
+      toast.appendChild(msg);
+      
+      setTimeout(() => msg.remove(), 3000);
+    }
+    
+    // Show warning if storage was large
+    try {
+      const raw = localStorage.getItem(ChatStorage.key);
+      if (raw && raw.length > 3 * 1024 * 1024) {
+        showStorageWarning();
+      }
+    } catch (e) {}
+    
+    console.log('✅ Storage quota issues fixed');
+  }
+  
+  // Run
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixStorageIssues);
+  } else {
+    fixStorageIssues();
+  }
+})();
+
+// CODE BLOCK ENHANCER - Beautiful syntax highlighting, copy button, line numbers
+(function() {
+  function enhanceCodeBlocks() {
+    // Wait for messages container
+    const msgs = document.getElementById('msgs');
+    if (!msgs) {
+      setTimeout(enhanceCodeBlocks, 500);
+      return;
+    }
+    
+    // ============================================
+    // 1. INJECT PRISM.JS FOR SYNTAX HIGHLIGHTING
+    // ============================================
+    if (!document.getElementById('prism-css')) {
+      const prismCSS = document.createElement('link');
+      prismCSS.id = 'prism-css';
+      prismCSS.rel = 'stylesheet';
+      prismCSS.href = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css';
+      document.head.appendChild(prismCSS);
+    }
+    
+    if (!document.getElementById('prism-js')) {
+      const prismJS = document.createElement('script');
+      prismJS.id = 'prism-js';
+      prismJS.src = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js';
+      document.head.appendChild(prismJS);
+      
+      // Load common languages
+      const languages = ['javascript', 'python', 'html', 'css', 'json', 'bash', 'markdown', 'typescript', 'jsx', 'tsx', 'sql'];
+      languages.forEach(lang => {
+        const script = document.createElement('script');
+        script.src = `https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-${lang}.min.js`;
+        document.head.appendChild(script);
+      });
+    }
+    
+    // ============================================
+    // 2. CUSTOM STYLES FOR CODE BLOCKS
+    // ============================================
+    const style = document.createElement('style');
+    style.textContent = `
+      /* Code block container */
+      .code-block-wrapper {
+        margin: 16px 0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+      }
+      
+      /* Header bar */
+      .code-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px;
+        background: rgba(0,0,0,0.3);
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        font-family: 'Syne Mono', monospace;
+        font-size: 12px;
+        color: rgba(255,255,255,0.5);
+      }
+      
+      .code-lang {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .lang-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #00ff88;
+        box-shadow: 0 0 10px #00ff88;
+      }
+      
+      .lang-name {
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        color: #00ff88;
+      }
+      
+      .code-actions {
+        display: flex;
+        gap: 8px;
+      }
+      
+      .code-btn {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.5);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-family: 'Syne Mono', monospace;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s ease;
+      }
+      
+      .code-btn:hover {
+        background: rgba(255,255,255,0.1);
+        border-color: #00ff88;
+        color: #00ff88;
+      }
+      
+      .code-btn svg {
+        width: 12px;
+        height: 12px;
+        stroke: currentColor;
+      }
+      
+      /* Code content */
+      pre[class*="language-"] {
+        margin: 0 !important;
+        border-radius: 0 !important;
+        background: #0a0a0a !important;
+        padding: 16px !important;
+        font-size: 13px !important;
+        line-height: 1.6 !important;
+        tab-size: 2;
+      }
+      
+      code[class*="language-"] {
+        font-family: 'Syne Mono', 'Fira Code', monospace !important;
+        text-shadow: none !important;
+      }
+      
+      /* Line numbers */
+      .line-numbers .line-numbers-rows {
+        border-right: 1px solid rgba(255,255,255,0.1) !important;
+      }
+      
+      .line-numbers-rows > span:before {
+        color: rgba(255,255,255,0.3) !important;
+      }
+      
+      /* Scrollbar */
+      pre[class*="language-"]::-webkit-scrollbar {
+        height: 8px;
+        width: 8px;
+      }
+      
+      pre[class*="language-"]::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.05);
+      }
+      
+      pre[class*="language-"]::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.2);
+        border-radius: 4px;
+      }
+      
+      pre[class*="language-"]::-webkit-scrollbar-thumb:hover {
+        background: #00ff88;
+      }
+      
+      /* Token colors - custom overrides */
+      .token.comment { color: #6a9955 !important; }
+      .token.keyword { color: #569cd6 !important; }
+      .token.string { color: #ce9178 !important; }
+      .token.function { color: #dcdcaa !important; }
+      .token.number { color: #b5cea8 !important; }
+      .token.operator { color: #d4d4d4 !important; }
+      .token.class-name { color: #4ec9b0 !important; }
+      .token.tag { color: #569cd6 !important; }
+      .token.attr-name { color: #9cdcfe !important; }
+      .token.attr-value { color: #ce9178 !important; }
+      
+      /* Mobile adjustments */
+      @media (max-width: 680px) {
+        .code-header {
+          padding: 8px 12px;
+        }
+        
+        pre[class*="language-"] {
+          padding: 12px !important;
+          font-size: 12px !important;
+        }
+        
+        .code-btn {
+          padding: 6px 10px;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // ============================================
+    // 3. FUNCTION TO PROCESS CODE BLOCKS
+    // ============================================
+    function processCodeBlocks() {
+      document.querySelectorAll('.msg-body pre, .msg-body code').forEach(el => {
+        // Skip if already processed
+        if (el.closest('.code-block-wrapper')) return;
+        
+        // Find the actual code block
+        let pre = el.tagName === 'PRE' ? el : el.closest('pre');
+        if (!pre) return;
+        
+        // Get language from class
+        let lang = 'plaintext';
+        const classMatch = pre.className.match(/language-(\w+)/);
+        if (classMatch) {
+          lang = classMatch[1];
+        } else {
+          // Try to detect from code tag
+          const code = pre.querySelector('code');
+          if (code) {
+            const codeMatch = code.className.match(/language-(\w+)/);
+            if (codeMatch) lang = codeMatch[1];
+          }
+        }
+        
+        // Get code content
+        const code = pre.querySelector('code') || pre;
+        const codeText = code.textContent || code.innerText;
+        
+        // Create wrapper
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block-wrapper';
+        
+        // Create header
+        const header = document.createElement('div');
+        header.className = 'code-header';
+        
+        const langDiv = document.createElement('div');
+        langDiv.className = 'code-lang';
+        langDiv.innerHTML = `
+          <span class="lang-dot"></span>
+          <span class="lang-name">${lang}</span>
+        `;
+        
+        const actions = document.createElement('div');
+        actions.className = 'code-actions';
+        
+        // Copy button
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'code-btn copy-code';
+        copyBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy
+        `;
+        
+        copyBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          navigator.clipboard.writeText(codeText).then(() => {
+            const originalText = copyBtn.innerHTML;
+            copyBtn.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Copied!
+            `;
+            setTimeout(() => {
+              copyBtn.innerHTML = originalText;
+            }, 2000);
+          });
+        });
+        
+        // Run button (for executable code)
+        const runBtn = document.createElement('button');
+        runBtn.className = 'code-btn run-code';
+        runBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          Run
+        `;
+        
+        runBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Show run output in a toast or new message
+          try {
+            // For JavaScript, eval safely
+            if (lang === 'javascript' || lang === 'js') {
+              const result = eval(codeText);
+              showRunOutput(result, lang);
+            } else {
+              showRunOutput(`Cannot run ${lang} code directly`, 'error');
+            }
+          } catch (err) {
+            showRunOutput(`Error: ${err.message}`, 'error');
+          }
+        });
+        
+        actions.appendChild(copyBtn);
+        // Only show run for JavaScript
+        if (lang === 'javascript' || lang === 'js') {
+          actions.appendChild(runBtn);
+        }
+        
+        header.appendChild(langDiv);
+        header.appendChild(actions);
+        
+        // Clone the pre to avoid modifying original
+        const newPre = pre.cloneNode(true);
+        
+        // Add line numbers class
+        newPre.classList.add('line-numbers');
+        
+        // Wrap everything
+        wrapper.appendChild(header);
+        wrapper.appendChild(newPre);
+        
+        // Replace original pre
+        pre.parentNode.replaceChild(wrapper, pre);
+      });
+      
+      // Apply Prism highlighting
+      if (window.Prism) {
+        window.Prism.highlightAll();
+      }
+    }
+    
+    // ============================================
+    // 4. RUN OUTPUT DISPLAY
+    // ============================================
+    function showRunOutput(output, lang) {
+      const msgs = document.getElementById('msgs');
+      if (!msgs) return;
+      
+      const outputDiv = document.createElement('div');
+      outputDiv.className = 'msg-group';
+      outputDiv.innerHTML = `
+        <div class="msg-header">
+          <div class="msg-av ai" style="background: #00ff8820; color: #00ff88;">⚡</div>
+          <span class="msg-name ai">Code Output</span>
+          <span class="msg-ts">${new Date().toLocaleTimeString()}</span>
+        </div>
+        <div class="msg-body">
+          <pre style="background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 12px; color: ${lang === 'error' ? '#ff6b6b' : '#00ff88'}; font-family: 'Syne Mono', monospace; font-size: 13px;">${String(output)}</pre>
+        </div>
+      `;
+      
+      msgs.appendChild(outputDiv);
+      outputDiv.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    // ============================================
+    // 5. OBSERVE NEW MESSAGES
+    // ============================================
+    const observer = new MutationObserver((mutations) => {
+      let shouldProcess = false;
+      
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === 1 && (node.classList.contains('msg-group') || node.querySelector('pre'))) {
+            shouldProcess = true;
+          }
+        });
+      });
+      
+      if (shouldProcess) {
+        setTimeout(processCodeBlocks, 100);
+      }
+    });
+    
+    observer.observe(msgs, { childList: true, subtree: true });
+    
+    // Initial process
+    setTimeout(processCodeBlocks, 1000);
+    
+    // ============================================
+    // 6. OVERRIDE RENDER FUNCTION TO ENSURE PROCESSING
+    // ============================================
+    const originalRenderMd = window.renderMd;
+    if (originalRenderMd) {
+      window.renderMd = function(raw) {
+        let html = originalRenderMd(raw);
+        // Ensure code blocks have proper classes
+        html = html.replace(/<pre><code class="language-(\w+)">/g, '<pre class="language-$1"><code class="language-$1">');
+        return html;
+      };
+    }
+    
+    console.log('✅ Code blocks enhanced - beautiful syntax highlighting');
+  }
+  
+  // Initialize
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', enhanceCodeBlocks);
+  } else {
+    enhanceCodeBlocks();
+  }
+})();
+
+// CODE BLOCK CONTAINER FIX - Proper box, no overflow, clean scroll
+(function() {
+  function fixCodeContainers() {
+    // Wait for messages
+    const msgs = document.getElementById('msgs');
+    if (!msgs) {
+      setTimeout(fixCodeContainers, 500);
+      return;
+    }
+    
+    // ============================================
+    // 1. ADD CRITICAL CSS FOR CODE BLOCKS
+    // ============================================
+    const style = document.createElement('style');
+    style.textContent = `
+      /* Code block container - forces proper box */
+      .msg-body pre {
+        background: #0f0f0f !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 12px !important;
+        margin: 16px 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        max-width: 100% !important;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+      }
+      
+      /* Code inside - scrollable */
+      .msg-body pre code {
+        display: block !important;
+        padding: 16px !important;
+        overflow-x: auto !important;
+        white-space: pre !important;
+        word-wrap: normal !important;
+        font-family: 'Syne Mono', 'Fira Code', monospace !important;
+        font-size: 13px !important;
+        line-height: 1.6 !important;
+        color: #e0e0e0 !important;
+        background: #0f0f0f !important;
+        max-width: 100% !important;
+      }
+      
+      /* Scrollbar styling */
+      .msg-body pre code::-webkit-scrollbar {
+        height: 8px;
+        background: #1a1a1a;
+      }
+      
+      .msg-body pre code::-webkit-scrollbar-thumb {
+        background: #333;
+        border-radius: 4px;
+      }
+      
+      .msg-body pre code::-webkit-scrollbar-thumb:hover {
+        background: #00ff88;
+      }
+      
+      /* Header bar for code blocks */
+      .code-header-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px;
+        background: #1a1a1a;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        font-size: 12px;
+        font-family: 'Syne Mono', monospace;
+        border-radius: 12px 12px 0 0;
+      }
+      
+      .code-lang-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      
+      .code-lang-badge span {
+        color: #00ff88;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      
+      .code-copy-btn {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.5);
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 11px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+      }
+      
+      .code-copy-btn:hover {
+        border-color: #00ff88;
+        color: #00ff88;
+        background: rgba(0,255,136,0.1);
+      }
+      
+      /* Inline code */
+      .msg-body code:not(pre code) {
+        background: rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 4px !important;
+        padding: 2px 6px !important;
+        font-size: 13px !important;
+        color: #00ff88 !important;
+        white-space: nowrap !important;
+      }
+      
+      /* Force all code blocks to stay within container */
+      .msg-body {
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+      }
+      
+      .msg-body pre {
+        max-width: 100% !important;
+      }
+      
+      /* Mobile adjustments */
+      @media (max-width: 680px) {
+        .msg-body pre code {
+          font-size: 12px !important;
+          padding: 12px !important;
+        }
+        
+        .code-header-bar {
+          padding: 6px 12px;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // ============================================
+    // 2. PROCESS ALL CODE BLOCKS
+    // ============================================
+    function processCodeBlocks() {
+      document.querySelectorAll('.msg-body pre').forEach(pre => {
+        // Skip if already processed
+        if (pre.hasAttribute('data-processed')) return;
+        
+        // Get code element
+        let code = pre.querySelector('code');
+        if (!code) {
+          // Wrap content in code tag
+          code = document.createElement('code');
+          code.textContent = pre.textContent;
+          pre.innerHTML = '';
+          pre.appendChild(code);
+        }
+        
+        // Detect language
+        let lang = 'text';
+        const classMatch = pre.className.match(/language-(\w+)/) || code.className.match(/language-(\w+)/);
+        if (classMatch) {
+          lang = classMatch[1];
+        }
+        
+        // Create header
+        const header = document.createElement('div');
+        header.className = 'code-header-bar';
+        
+        const langDiv = document.createElement('div');
+        langDiv.className = 'code-lang-badge';
+        langDiv.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00ff88" stroke-width="2">
+            <rect x="2" y="3" width="20" height="18" rx="2" ry="2"></rect>
+            <line x1="8" y1="9" x2="16" y2="9"></line>
+            <line x1="8" y1="13" x2="12" y2="13"></line>
+          </svg>
+          <span>${lang}</span>
+        `;
+        
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'code-copy-btn';
+        copyBtn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy
+        `;
+        
+        copyBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const codeText = code.textContent;
+          navigator.clipboard.writeText(codeText).then(() => {
+            const original = copyBtn.innerHTML;
+            copyBtn.innerHTML = `
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Copied!
+            `;
+            setTimeout(() => {
+              copyBtn.innerHTML = original;
+            }, 2000);
+          });
+        });
+        
+        header.appendChild(langDiv);
+        header.appendChild(copyBtn);
+        
+        // Insert header before pre
+        pre.parentNode.insertBefore(header, pre);
+        
+        // Mark as processed
+        pre.setAttribute('data-processed', 'true');
+        
+        // Ensure code is scrollable
+        code.style.overflowX = 'auto';
+        code.style.whiteSpace = 'pre';
+        code.style.display = 'block';
+      });
+      
+      // Fix any code blocks without proper wrapping
+      document.querySelectorAll('.msg-body code:not(pre code)').forEach(code => {
+        if (!code.closest('pre')) {
+          // This is inline code, already styled via CSS
+        }
+      });
+    }
+    
+    // ============================================
+    // 3. OBSERVE NEW MESSAGES
+    // ============================================
+    const observer = new MutationObserver(() => {
+      setTimeout(processCodeBlocks, 50);
+    });
+    
+    observer.observe(msgs, { childList: true, subtree: true });
+    
+    // Initial processing
+    setTimeout(processCodeBlocks, 500);
+    
+    // Also process when messages are rebuilt
+    const originalRebuild = window.rebuildMsgs;
+    if (originalRebuild) {
+      window.rebuildMsgs = function(session) {
+        originalRebuild(session);
+        setTimeout(processCodeBlocks, 100);
+      };
+    }
+    
+    console.log('✅ Code blocks fixed - proper boxes, no overflow');
+  }
+  
+  // Initialize
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixCodeContainers);
+  } else {
+    fixCodeContainers();
+  }
+})();
+
+// FIX DRAG & DROP GLITCH - Prevents page resize issues
+(function() {
+  function fixDragDropGlitch() {
+    // ============================================
+    // 1. MONITOR AND FIX BODY STYLES
+    // ============================================
+    function fixBodyStyles() {
+      // Remove any inline styles that break layout
+      document.body.style.cssText = '';
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+      
+      // Ensure html is correct
+      document.documentElement.style.cssText = '';
+      document.documentElement.style.overflow = '';
+      
+      // Fix main container
+      const main = document.querySelector('.main');
+      if (main) {
+        main.style.cssText = '';
+        main.style.flex = '1';
+        main.style.display = 'flex';
+        main.style.flexDirection = 'column';
+        main.style.minWidth = '0';
+      }
+      
+      // Fix messages container
+      const msgsWrap = document.getElementById('msgsWrap');
+      if (msgsWrap) {
+        msgsWrap.style.cssText = '';
+        msgsWrap.style.flex = '1';
+        msgsWrap.style.overflowY = 'auto';
+      }
+    }
+    
+    // ============================================
+    // 2. OVERRIDE FILE HANDLING TO PREVENT GLITCH
+    // ============================================
+    const originalHandleFiles = window.handleFiles;
+    if (originalHandleFiles) {
+      window.handleFiles = async function(files) {
+        try {
+          // Store scroll position
+          const msgsWrap = document.getElementById('msgsWrap');
+          const scrollPos = msgsWrap ? msgsWrap.scrollTop : 0;
+          
+          // Call original
+          await originalHandleFiles(files);
+          
+          // Fix any layout issues
+          setTimeout(() => {
+            fixBodyStyles();
+            
+            // Restore scroll if needed
+            if (msgsWrap && scrollPos > 0) {
+              msgsWrap.scrollTop = scrollPos;
+            }
+          }, 100);
+          
+        } catch (err) {
+          console.error('File handling error:', err);
+          fixBodyStyles();
+        }
+      };
+    }
+    
+    // ============================================
+    // 3. OVERRIDE SEND FUNCTION
+    // ============================================
+    const originalSend = window.send;
+    if (originalSend) {
+      window.send = async function() {
+        try {
+          // Store scroll position
+          const msgsWrap = document.getElementById('msgsWrap');
+          const scrollPos = msgsWrap ? msgsWrap.scrollTop : 0;
+          
+          // Call original
+          await originalSend();
+          
+          // Fix layout after send
+          setTimeout(() => {
+            fixBodyStyles();
+            
+            // Restore scroll if needed
+            if (msgsWrap && scrollPos > 0) {
+              msgsWrap.scrollTop = scrollPos;
+            }
+          }, 200);
+          
+        } catch (err) {
+          console.error('Send error:', err);
+          fixBodyStyles();
+        }
+      };
+    }
+    
+    // ============================================
+    // 4. FIX DROP ZONE TO NOT BREAK LAYOUT
+    // ============================================
+    const dropZone = document.getElementById('advanced-dropzone') || 
+                     document.getElementById('premium-dropzone') || 
+                     document.getElementById('file-drop-zone');
+    
+    if (dropZone) {
+      // Ensure drop zone doesn't affect layout
+      dropZone.style.position = 'fixed';
+      dropZone.style.top = '0';
+      dropZone.style.left = '0';
+      dropZone.style.right = '0';
+      dropZone.style.bottom = '0';
+      dropZone.style.zIndex = '999999';
+      dropZone.style.pointerEvents = 'none';
+      
+      // Override display changes to not affect body
+      const originalShow = dropZone.style.display;
+      Object.defineProperty(dropZone.style, 'display', {
+        set: function(value) {
+          if (value === 'flex' || value === 'block') {
+            // Show without affecting body
+            this._value = value;
+            dropZone.style.opacity = '1';
+            // Don't change body overflow
+          } else {
+            this._value = value;
+            dropZone.style.opacity = '0';
+          }
+        },
+        get: function() {
+          return this._value || 'none';
+        }
+      });
+    }
+    
+    // ============================================
+    // 5. OBSERVE AND FIX ANY LAYOUT CHANGES
+    // ============================================
+    const observer = new MutationObserver(() => {
+      // Check for broken layout
+      const bodyStyle = window.getComputedStyle(document.body);
+      if (bodyStyle.overflow === 'hidden' || bodyStyle.position === 'fixed') {
+        fixBodyStyles();
+      }
+      
+      // Check for black edges
+      const htmlStyle = window.getComputedStyle(document.documentElement);
+      if (htmlStyle.overflow === 'hidden') {
+        document.documentElement.style.overflow = '';
+      }
+    });
+    
+    observer.observe(document.body, { 
+      attributes: true, 
+      attributeFilter: ['style', 'class'] 
+    });
+    
+    // ============================================
+    // 6. FIX ON RESIZE
+    // ============================================
+    window.addEventListener('resize', () => {
+      fixBodyStyles();
+    });
+    
+    // ============================================
+    // 7. FIX AFTER ANY ANIMATION
+    // ============================================
+    setInterval(fixBodyStyles, 2000); // Safety check every 2 seconds
+    
+    // ============================================
+    // 8. ADD CRITICAL CSS
+    // ============================================
+    const style = document.createElement('style');
+    style.textContent = `
+      /* Force proper layout */
+      html, body {
+        overflow: visible !important;
+        position: static !important;
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      
+      .shell {
+        height: 100vh !important;
+        display: flex !important;
+        position: relative !important;
+      }
+      
+      .main {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-width: 0 !important;
+      }
+      
+      .msgs-wrap {
+        flex: 1 !important;
+        overflow-y: auto !important;
+      }
+      
+      /* Fix drop zones */
+      #advanced-dropzone,
+      #premium-dropzone,
+      #file-drop-zone {
+        position: fixed !important;
+        pointer-events: none !important;
+        z-index: 999999 !important;
+      }
+      
+      /* Ensure no black edges */
+      body::after {
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Initial fix
+    fixBodyStyles();
+    
+    console.log('✅ Drag & drop glitch fixed - page stays full size');
+  }
+  
+  // Run
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixDragDropGlitch);
+  } else {
+    fixDragDropGlitch();
+  }
+})();
 </script>
 </body>
 </html>
