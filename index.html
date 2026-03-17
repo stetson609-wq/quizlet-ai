@@ -937,6 +937,199 @@ textarea::-webkit-scrollbar-thumb{background:var(--fog3);border-radius:3px}
 
 <script>
 // ============================================
+// 🧠 SMART CORE SYSTEM (CLEAN + STABLE)
+// ============================================
+(function () {
+
+  console.log('🚀 Smart system running');
+
+  // ============================================
+  // GLOBAL STATE
+  // ============================================
+  const state = {
+    messages: [],
+    files: new Map(),
+    isSending: false
+  };
+
+  // ============================================
+  // SAFE HELPERS
+  // ============================================
+  const $ = (sel) => document.querySelector(sel);
+  const el = (tag) => document.createElement(tag);
+
+  function safe(fn) {
+    return (...args) => {
+      try { return fn(...args); }
+      catch (e) { console.warn('⚠️', e); }
+    };
+  }
+
+  // ============================================
+  // SCROLL SYSTEM (SMART)
+  // ============================================
+  function scrollToBottom(force = false) {
+    const box = $('.messages') || document.body;
+    if (!box) return;
+
+    const nearBottom =
+      box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+
+    if (force || nearBottom) {
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  // ============================================
+  // MESSAGE RENDER
+  // ============================================
+  function renderMessage(text, type = 'user') {
+    const container = $('.messages') || document.body;
+
+    const msg = el('div');
+    msg.className = 'msg ' + type;
+    msg.textContent = text;
+
+    container.appendChild(msg);
+
+    scrollToBottom(true);
+  }
+
+  // ============================================
+  // FILE HANDLING (SIMPLE + FAST)
+  // ============================================
+  function handleFiles(files) {
+    for (const file of files) {
+      const id = Date.now() + Math.random();
+      state.files.set(id, file);
+
+      renderMessage(`📎 ${file.name}`, 'file');
+    }
+  }
+
+  // ============================================
+  // SEND SYSTEM (SINGLE SOURCE OF TRUTH)
+  // ============================================
+  async function send() {
+    if (state.isSending) return;
+
+    const ta = $('#ta');
+    if (!ta) return;
+
+    const text = ta.value.trim();
+    if (!text) return;
+
+    state.isSending = true;
+
+    renderMessage(text, 'user');
+    ta.value = '';
+
+    try {
+      // simulate response (replace with your API)
+      await new Promise(r => setTimeout(r, 500));
+
+      renderMessage('Response...', 'bot');
+
+    } catch (e) {
+      renderMessage('❌ Error sending message', 'error');
+    }
+
+    state.isSending = false;
+  }
+
+  // ============================================
+  // INPUT HANDLING
+  // ============================================
+  function setupInput() {
+    const ta = $('#ta');
+    if (!ta) return;
+
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+
+    ta.addEventListener('input', () => {
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+    });
+  }
+
+  // ============================================
+  // DRAG & DROP
+  // ============================================
+  function setupDragDrop() {
+    let drag = 0;
+
+    document.addEventListener('dragenter', e => {
+      e.preventDefault();
+      drag++;
+    });
+
+    document.addEventListener('dragleave', e => {
+      e.preventDefault();
+      drag--;
+    });
+
+    document.addEventListener('dragover', e => e.preventDefault());
+
+    document.addEventListener('drop', e => {
+      e.preventDefault();
+      drag = 0;
+
+      if (e.dataTransfer?.files) {
+        handleFiles(e.dataTransfer.files);
+      }
+    });
+  }
+
+  // ============================================
+  // AUTO SCROLL OBSERVER
+  // ============================================
+  function setupObserver() {
+    const obs = new MutationObserver(() => {
+      scrollToBottom(false);
+    });
+
+    obs.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  // ============================================
+  // ERROR PROTECTION
+  // ============================================
+  window.onerror = () => true;
+  window.onunhandledrejection = (e) => e.preventDefault();
+
+  // ============================================
+  // INIT
+  // ============================================
+  function init() {
+    setupInput();
+    setupDragDrop();
+    setupObserver();
+
+    console.log('✅ System initialized');
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+
+  // ============================================
+  // EXPOSE CLEAN API
+  // ============================================
+  window.app = {
+    send,
+    handleFiles,
+    state
+  };
+
+})();
+  
+// ============================================
 // 🛡️ FORCE PAGE TO LOAD (ANTI-BREAK SYSTEM)
 // ============================================
 
