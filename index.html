@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -6464,6 +6465,113 @@ function toast(msg,type=''){
   };
 
 })();
+
+(function() {
+  const container = document.getElementById('msgsWrap');
+  const sendBtn = document.getElementById('sendBtn');
+  const textarea = document.getElementById('ta');
+
+  if (!container) return;
+
+  let autoScroll = true; // Is auto-scrolling enabled?
+  let targetScroll = container.scrollHeight;
+
+  // Smooth scroll function
+  function smoothScroll() {
+    if (!autoScroll) return;
+    const current = container.scrollTop;
+    const distance = targetScroll - current;
+    if (Math.abs(distance) > 0.5) {
+      container.scrollTop = current + distance * 0.1;
+      requestAnimationFrame(smoothScroll);
+    } else {
+      container.scrollTop = targetScroll;
+    }
+  }
+
+  // Update target when new messages appear
+  const observer = new MutationObserver(() => {
+    targetScroll = container.scrollHeight;
+    if (autoScroll) smoothScroll();
+  });
+  observer.observe(container, { childList: true, subtree: true });
+
+  // Detect user scrolls
+  let lastScroll = container.scrollTop;
+  container.addEventListener('scroll', () => {
+    const scrollDiff = container.scrollTop - lastScroll;
+    lastScroll = container.scrollTop;
+
+    // User scrolled up manually
+    if (scrollDiff < -2) {
+      autoScroll = false;
+    }
+  });
+
+  // Re-enable auto-scroll on send button click
+  sendBtn.addEventListener('click', () => {
+    autoScroll = true;
+    targetScroll = container.scrollHeight;
+    smoothScroll();
+  });
+
+  // Re-enable auto-scroll on Enter in textarea
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      autoScroll = true;
+      targetScroll = container.scrollHeight;
+      smoothScroll();
+    }
+  });
+
+  // Initial scroll to bottom
+  targetScroll = container.scrollHeight;
+  smoothScroll();
+})();
+
+// Target the input area
+const inputArea = document.querySelector('.input-area');
+
+if (inputArea) {
+  // Function to make an element and all children fully transparent
+  function makeFullyTransparent(el) {
+    const allElements = [el, ...el.querySelectorAll('*')];
+
+    allElements.forEach(child => {
+      child.style.setProperty('background', 'transparent', 'important');
+      child.style.setProperty('background-color', 'transparent', 'important');
+      child.style.setProperty('box-shadow', 'none', 'important');
+      child.style.setProperty('border', 'none', 'important');
+      child.style.setProperty('outline', 'none', 'important');
+      child.style.setProperty('caret-color', 'auto', 'important'); // for textarea caret
+      child.style.setProperty('color', 'inherit', 'important'); // keeps text visible
+
+      // Force SVGs to inherit transparency
+      if (child.tagName.toLowerCase() === 'svg') {
+        child.style.setProperty('fill', 'currentColor', 'important');
+        child.style.setProperty('stroke', 'currentColor', 'important');
+      }
+    });
+  }
+
+  // Initial call
+  makeFullyTransparent(inputArea);
+
+  // MutationObserver to handle dynamically added elements or attribute changes
+  const observer = new MutationObserver(() => {
+    makeFullyTransparent(inputArea);
+  });
+
+  observer.observe(inputArea, {
+    childList: true,  // detect new elements
+    subtree: true,    // detect nested elements
+    attributes: true, // detect style changes
+    attributeFilter: ['style', 'class'] // only watch for style/class changes
+  });
+
+  // Optional: auto-stop observing after 1 minute to reduce overhead
+  setTimeout(() => observer.disconnect(), 60000);
+}
 </script>
 </body>
 </html>
