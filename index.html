@@ -6508,6 +6508,129 @@ function toast(msg,type=''){
     scrollToBottom();
   });
 })();
+
+(function() {
+  const msgsWrap = document.getElementById('msgsWrap');
+  const msgs = document.getElementById('msgs');
+  const convArea = document.getElementById('convArea');
+
+  let userScrolledUp = false;
+
+  // ---------- 1️⃣ Detect manual scrolling ----------
+  msgsWrap.addEventListener('scroll', () => {
+    const threshold = 50; // pixels from bottom to still auto-scroll
+    const atBottom = msgsWrap.scrollHeight - msgsWrap.scrollTop - msgsWrap.clientHeight < threshold;
+    userScrolledUp = !atBottom;
+  });
+
+  // ---------- 2️⃣ Smart scroll ----------
+  function scrollToBottom() {
+    if (!userScrolledUp) {
+      requestAnimationFrame(() => {
+        msgsWrap.scrollTop = msgsWrap.scrollHeight;
+      });
+    }
+  }
+
+  // ---------- 3️⃣ Save the chat ----------
+  function saveChat() {
+    const chatData = Array.from(msgs.querySelectorAll('.msg-group')).map(group => {
+      const senderEl = group.querySelector('.msg-name');
+      const bodyEl = group.querySelector('.msg-body');
+      return {
+        sender: senderEl ? senderEl.textContent.trim() : 'unknown',
+        body: bodyEl ? bodyEl.innerHTML.trim() : ''
+      };
+    });
+    localStorage.setItem('savedChat', JSON.stringify(chatData));
+  }
+
+  // ---------- 4️⃣ Save conversation list ----------
+  function saveConversations() {
+    const convData = Array.from(convArea.querySelectorAll('.conv-row')).map(row => {
+      const nameEl = row.querySelector('.conv-name');
+      return {
+        name: nameEl ? nameEl.textContent.trim() : 'unknown',
+        active: row.classList.contains('on')
+      };
+    });
+    localStorage.setItem('savedConversations', JSON.stringify(convData));
+  }
+
+  // ---------- 5️⃣ Restore chat ----------
+  function restoreChat() {
+    const saved = localStorage.getItem('savedChat');
+    if (!saved) return;
+    const chatData = JSON.parse(saved);
+    chatData.forEach(msg => {
+      const div = document.createElement('div');
+      div.className = 'msg-group';
+      div.innerHTML = `
+        <div class="msg-header">
+          <span class="msg-name">${msg.sender}</span>
+        </div>
+        <div class="msg-body">${msg.body}</div>
+      `;
+      msgs.appendChild(div);
+    });
+    scrollToBottom();
+  }
+
+  // ---------- 6️⃣ Restore conversation list ----------
+  function restoreConversations() {
+    const saved = localStorage.getItem('savedConversations');
+    if (!saved) return;
+    const convData = JSON.parse(saved);
+    convArea.innerHTML = ''; // clear existing
+    convData.forEach(conv => {
+      const div = document.createElement('div');
+      div.className = 'conv-row';
+      if (conv.active) div.classList.add('on');
+      div.style.position = 'relative';
+      div.innerHTML = `
+        <div class="conv-icon">◇</div>
+        <span class="conv-name">${conv.name}</span>
+        <button class="delete-chat" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--fog3); background: var(--fog); color: var(--dim); cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.2s cubic-bezier(0.2, 0, 0, 1); z-index: 10; padding: 0px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+          </svg>
+        </button>
+      `;
+      convArea.appendChild(div);
+    });
+  }
+
+  // ---------- 7️⃣ Observe chat messages ----------
+  const msgObserver = new MutationObserver(() => {
+    scrollToBottom();
+    saveChat();
+  });
+
+  msgObserver.observe(msgs, { childList: true, subtree: true, characterData: true });
+
+  // ---------- 8️⃣ Observe conversation changes ----------
+  const convObserver = new MutationObserver(() => saveConversations());
+  convObserver.observe(convArea, { childList: true, subtree: true, characterData: true });
+
+  // ---------- 9️⃣ Monitor AI typing messages ----------
+  window.monitorTyping = function(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const innerObserver = new MutationObserver(() => {
+      scrollToBottom();
+      saveChat();
+    });
+    innerObserver.observe(el, { childList: true, subtree: true, characterData: true });
+  };
+
+  // ---------- 🔟 Initialize ----------
+  restoreConversations();
+  restoreChat();
+  scrollToBottom();
+})();
 </script>
 </body>
 </html>
