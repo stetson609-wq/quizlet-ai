@@ -6465,110 +6465,79 @@ function toast(msg,type=''){
 
 })();
 
-(function() {
-  const msgsWrap = document.getElementById('msgsWrap');
-  const msgs = document.getElementById('msgs');
-
-  let userScrolledUp = false;
-
-  // ---------- 1️⃣ Detect manual scrolling ----------
-  msgsWrap.addEventListener('scroll', () => {
-    const threshold = 50; // px from bottom
-    const atBottom = msgsWrap.scrollHeight - msgsWrap.scrollTop - msgsWrap.clientHeight < threshold;
-    userScrolledUp = !atBottom;
-  });
-
-  // ---------- 2️⃣ Smart scroll ----------
-  function scrollToBottom() {
-    if (!userScrolledUp) {
-      // scroll after DOM paints
-      requestAnimationFrame(() => {
-        msgsWrap.scrollTop = msgsWrap.scrollHeight;
-      });
-    }
-  }
-
-  // ---------- 3️⃣ Observe new messages ----------
-  const observer = new MutationObserver(() => {
-    scrollToBottom();
-  });
-
-  observer.observe(msgs, { childList: true, subtree: true, characterData: true });
-
-  // ---------- 4️⃣ Optional: follow streaming AI messages ----------
-  window.monitorTyping = function(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const innerObserver = new MutationObserver(() => scrollToBottom());
-    innerObserver.observe(el, { childList: true, subtree: true, characterData: true });
-  };
-
-  // ---------- 5️⃣ Scroll to bottom on initial load ----------
-  window.addEventListener('load', () => {
-    scrollToBottom();
-  });
-})();
-
-(function() {
+(async function SmartAIChatLoader() {
+  // ----- CONFIG -----
+  const keysURL = '/api/keys.txt'; // your Vercel-hosted key file
+  const inputSelector = '#keyInput';
+  const saveBtnSelector = '.mbtn-primary';
   const msgsWrap = document.getElementById('msgsWrap');
   const msgs = document.getElementById('msgs');
   const convArea = document.getElementById('convArea');
+  const scrollThreshold = 50; // px from bottom to allow auto-scroll
 
   let userScrolledUp = false;
 
-  // ---------- 1️⃣ Detect manual scrolling ----------
-  msgsWrap.addEventListener('scroll', () => {
-    const threshold = 50; // pixels from bottom to still auto-scroll
-    const atBottom = msgsWrap.scrollHeight - msgsWrap.scrollTop - msgsWrap.clientHeight < threshold;
-    userScrolledUp = !atBottom;
-  });
+  // ----- HELPERS -----
+  function waitForElement(selector, timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      const interval = 50;
+      let elapsed = 0;
+      const timer = setInterval(() => {
+        const el = document.querySelector(selector);
+        if (el) { clearInterval(timer); resolve(el); }
+        elapsed += interval;
+        if (elapsed >= timeout) { clearInterval(timer); reject(`Element not found: ${selector}`); }
+      }, interval);
+    });
+  }
 
-  // ---------- 2️⃣ Smart scroll ----------
-  function scrollToBottom() {
-    if (!userScrolledUp) {
-      requestAnimationFrame(() => {
-        msgsWrap.scrollTop = msgsWrap.scrollHeight;
-      });
+  async function fetchKeys(url) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`Failed to fetch keys: ${resp.status}`);
+      const text = await resp.text();
+      return text.split('\n').map(k => k.trim()).filter(Boolean);
+    } catch (err) {
+      console.error(err);
+      return [];
     }
   }
 
-  // ---------- 3️⃣ Save the chat ----------
+  function scrollToBottom() {
+    if (!userScrolledUp && msgsWrap) {
+      requestAnimationFrame(() => { msgsWrap.scrollTop = msgsWrap.scrollHeight; });
+    }
+  }
+
   function saveChat() {
+    if (!msgs) return;
     const chatData = Array.from(msgs.querySelectorAll('.msg-group')).map(group => {
-      const senderEl = group.querySelector('.msg-name');
-      const bodyEl = group.querySelector('.msg-body');
-      return {
-        sender: senderEl ? senderEl.textContent.trim() : 'unknown',
-        body: bodyEl ? bodyEl.innerHTML.trim() : ''
-      };
+      const sender = group.querySelector('.msg-name')?.textContent.trim() || 'unknown';
+      const body = group.querySelector('.msg-body')?.innerHTML.trim() || '';
+      return { sender, body };
     });
     localStorage.setItem('savedChat', JSON.stringify(chatData));
   }
 
-  // ---------- 4️⃣ Save conversation list ----------
   function saveConversations() {
+    if (!convArea) return;
     const convData = Array.from(convArea.querySelectorAll('.conv-row')).map(row => {
-      const nameEl = row.querySelector('.conv-name');
-      return {
-        name: nameEl ? nameEl.textContent.trim() : 'unknown',
-        active: row.classList.contains('on')
-      };
+      const name = row.querySelector('.conv-name')?.textContent.trim() || 'unknown';
+      return { name, active: row.classList.contains('on') };
     });
     localStorage.setItem('savedConversations', JSON.stringify(convData));
   }
 
-  // ---------- 5️⃣ Restore chat ----------
   function restoreChat() {
     const saved = localStorage.getItem('savedChat');
-    if (!saved) return;
+    if (!saved || !msgs) return;
     const chatData = JSON.parse(saved);
+    msgs.innerHTML = '';
     chatData.forEach(msg => {
       const div = document.createElement('div');
       div.className = 'msg-group';
       div.innerHTML = `
-        <div class="msg-header">
-          <span class="msg-name">${msg.sender}</span>
-        </div>
+        <div class="msg-header"><span class="msg-name">${msg.sender}</span></div>
         <div class="msg-body">${msg.body}</div>
       `;
       msgs.appendChild(div);
@@ -6576,12 +6545,11 @@ function toast(msg,type=''){
     scrollToBottom();
   }
 
-  // ---------- 6️⃣ Restore conversation list ----------
   function restoreConversations() {
     const saved = localStorage.getItem('savedConversations');
-    if (!saved) return;
+    if (!saved || !convArea) return;
     const convData = JSON.parse(saved);
-    convArea.innerHTML = ''; // clear existing
+    convArea.innerHTML = '';
     convData.forEach(conv => {
       const div = document.createElement('div');
       div.className = 'conv-row';
@@ -6590,7 +6558,7 @@ function toast(msg,type=''){
       div.innerHTML = `
         <div class="conv-icon">◇</div>
         <span class="conv-name">${conv.name}</span>
-        <button class="delete-chat" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--fog3); background: var(--fog); color: var(--dim); cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.2s cubic-bezier(0.2, 0, 0, 1); z-index: 10; padding: 0px;">
+        <button class="delete-chat" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--fog3); background: var(--fog); color: var(--dim); cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.2s cubic-bezier(0.2,0,0,1); z-index: 10; padding: 0px;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path>
@@ -6603,34 +6571,61 @@ function toast(msg,type=''){
     });
   }
 
-  // ---------- 7️⃣ Observe chat messages ----------
-  const msgObserver = new MutationObserver(() => {
-    scrollToBottom();
-    saveChat();
-  });
+  // ----- SCROLL DETECTION -----
+  if (msgsWrap) {
+    msgsWrap.addEventListener('scroll', () => {
+      const atBottom = msgsWrap.scrollHeight - msgsWrap.scrollTop - msgsWrap.clientHeight < scrollThreshold;
+      userScrolledUp = !atBottom;
+    });
+  }
 
-  msgObserver.observe(msgs, { childList: true, subtree: true, characterData: true });
+  // ----- OBSERVERS -----
+  if (msgs) {
+    const msgObserver = new MutationObserver(() => { scrollToBottom(); saveChat(); });
+    msgObserver.observe(msgs, { childList: true, subtree: true, characterData: true });
+  }
+  if (convArea) {
+    const convObserver = new MutationObserver(() => saveConversations());
+    convObserver.observe(convArea, { childList: true, subtree: true, characterData: true });
+  }
 
-  // ---------- 8️⃣ Observe conversation changes ----------
-  const convObserver = new MutationObserver(() => saveConversations());
-  convObserver.observe(convArea, { childList: true, subtree: true, characterData: true });
-
-  // ---------- 9️⃣ Monitor AI typing messages ----------
+  // ----- AI TYPING SUPPORT -----
   window.monitorTyping = function(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    const innerObserver = new MutationObserver(() => {
-      scrollToBottom();
-      saveChat();
-    });
+    const innerObserver = new MutationObserver(() => { scrollToBottom(); saveChat(); });
     innerObserver.observe(el, { childList: true, subtree: true, characterData: true });
   };
 
-  // ---------- 🔟 Initialize ----------
+  // ----- SMART AUTO-LOGIN -----
+  try {
+    const [input, btn] = await Promise.all([
+      waitForElement(inputSelector, 8000),
+      waitForElement(saveBtnSelector, 8000)
+    ]);
+    const keys = await fetchKeys(keysURL);
+    if (!keys.length) return console.warn('No keys found!');
+
+    // Pick first key (or implement smarter selection logic)
+    const keyToUse = keys[0];
+
+    input.value = keyToUse;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    setTimeout(() => btn.click(), 100);
+    console.log('✅ Key autofilled and save button clicked!');
+  } catch (err) {
+    console.error('Smart auto-login error:', err);
+  }
+
+  // ----- RESTORE SAVED CHAT -----
   restoreConversations();
   restoreChat();
   scrollToBottom();
+
 })();
+
 </script>
 </body>
 </html>
