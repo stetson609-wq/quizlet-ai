@@ -35,10 +35,10 @@ async function sendMessage(){
   render();
 
   try{
-    const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('null_groq')||'')},
-      body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'system',content:SYS},...history]})
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'system', content: SYS }, ...history] })
     });
     const data=await res.json();
     const reply=data.choices?.[0]?.message?.content||'No response';
