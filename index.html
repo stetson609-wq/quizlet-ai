@@ -1952,62 +1952,6 @@ clearCurrentChat = function() {
   autoSave();
 };
 
-// Simple, flawless scroll manager - zero glitches guaranteed
-const ScrollManager = {
-  wrap: null,
-  autoScroll: true,
-  
-  init() {
-    this.wrap = document.getElementById('msgsWrap');
-    if (!this.wrap) return;
-    
-    // Track if user wants auto-scroll
-    this.wrap.addEventListener('scroll', () => {
-      const atBottom = this.wrap.scrollHeight - this.wrap.scrollTop - this.wrap.clientHeight < 30;
-      this.autoScroll = atBottom;
-    });
-    
-    // Watch for new content
-    const observer = new MutationObserver(() => {
-      if (this.autoScroll) {
-        this.wrap.scrollTop = this.wrap.scrollHeight;
-      }
-    });
-    
-    observer.observe(this.wrap, { 
-      childList: true, 
-      subtree: true,
-      characterData: true 
-    });
-  },
-  
-  forceScroll() {
-    this.autoScroll = true;
-    this.wrap.scrollTo({
-      top: this.wrap.scrollHeight,
-      behavior: 'smooth'
-    });
-  }
-};
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => ScrollManager.init());
-
-// Replace scrollBot
-function scrollBot(force = true) {
-  if (force) {
-    ScrollManager.forceScroll();
-  } else {
-    const atBottom = ScrollManager.wrap.scrollHeight - ScrollManager.wrap.scrollTop - ScrollManager.wrap.clientHeight < 50;
-    if (atBottom) {
-      ScrollManager.wrap.scrollTo({
-        top: ScrollManager.wrap.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
-  }
-}
-
 /* ─── CANVAS BACKGROUND ─── */
 (function(){
   const canvas = document.getElementById('bg-canvas');
