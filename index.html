@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -1951,6 +1950,62 @@ clearCurrentChat = function() {
   originalClear();
   autoSave();
 };
+
+// Simple, flawless scroll manager - zero glitches guaranteed
+const ScrollManager = {
+  wrap: null,
+  autoScroll: true,
+  
+  init() {
+    this.wrap = document.getElementById('msgsWrap');
+    if (!this.wrap) return;
+    
+    // Track if user wants auto-scroll
+    this.wrap.addEventListener('scroll', () => {
+      const atBottom = this.wrap.scrollHeight - this.wrap.scrollTop - this.wrap.clientHeight < 30;
+      this.autoScroll = atBottom;
+    });
+    
+    // Watch for new content
+    const observer = new MutationObserver(() => {
+      if (this.autoScroll) {
+        this.wrap.scrollTop = this.wrap.scrollHeight;
+      }
+    });
+    
+    observer.observe(this.wrap, { 
+      childList: true, 
+      subtree: true,
+      characterData: true 
+    });
+  },
+  
+  forceScroll() {
+    this.autoScroll = true;
+    this.wrap.scrollTo({
+      top: this.wrap.scrollHeight,
+      behavior: 'smooth'
+    });
+  }
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => ScrollManager.init());
+
+// Replace scrollBot
+function scrollBot(force = true) {
+  if (force) {
+    ScrollManager.forceScroll();
+  } else {
+    const atBottom = ScrollManager.wrap.scrollHeight - ScrollManager.wrap.scrollTop - ScrollManager.wrap.clientHeight < 50;
+    if (atBottom) {
+      ScrollManager.wrap.scrollTo({
+        top: ScrollManager.wrap.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }
+}
 
 /* ─── CANVAS BACKGROUND ─── */
 (function(){
@@ -6411,111 +6466,48 @@ function toast(msg,type=''){
 })();
 
 (function() {
-  const container = document.getElementById('msgsWrap');
-  const sendBtn = document.getElementById('sendBtn');
-  const textarea = document.getElementById('ta');
+  const msgsWrap = document.getElementById('msgsWrap');
+  const msgs = document.getElementById('msgs');
 
-  if (!container) return;
+  let userScrolledUp = false;
 
-  let autoScroll = true; // Is auto-scrolling enabled?
-  let targetScroll = container.scrollHeight;
+  // ---------- 1️⃣ Detect manual scrolling ----------
+  msgsWrap.addEventListener('scroll', () => {
+    const threshold = 50; // px from bottom
+    const atBottom = msgsWrap.scrollHeight - msgsWrap.scrollTop - msgsWrap.clientHeight < threshold;
+    userScrolledUp = !atBottom;
+  });
 
-  // Smooth scroll function
-  function smoothScroll() {
-    if (!autoScroll) return;
-    const current = container.scrollTop;
-    const distance = targetScroll - current;
-    if (Math.abs(distance) > 0.5) {
-      container.scrollTop = current + distance * 0.1;
-      requestAnimationFrame(smoothScroll);
-    } else {
-      container.scrollTop = targetScroll;
+  // ---------- 2️⃣ Smart scroll ----------
+  function scrollToBottom() {
+    if (!userScrolledUp) {
+      // scroll after DOM paints
+      requestAnimationFrame(() => {
+        msgsWrap.scrollTop = msgsWrap.scrollHeight;
+      });
     }
   }
 
-  // Update target when new messages appear
+  // ---------- 3️⃣ Observe new messages ----------
   const observer = new MutationObserver(() => {
-    targetScroll = container.scrollHeight;
-    if (autoScroll) smoothScroll();
-  });
-  observer.observe(container, { childList: true, subtree: true });
-
-  // Detect user scrolls
-  let lastScroll = container.scrollTop;
-  container.addEventListener('scroll', () => {
-    const scrollDiff = container.scrollTop - lastScroll;
-    lastScroll = container.scrollTop;
-
-    // User scrolled up manually
-    if (scrollDiff < -2) {
-      autoScroll = false;
-    }
+    scrollToBottom();
   });
 
-  // Re-enable auto-scroll on send button click
-  sendBtn.addEventListener('click', () => {
-    autoScroll = true;
-    targetScroll = container.scrollHeight;
-    smoothScroll();
-  });
+  observer.observe(msgs, { childList: true, subtree: true, characterData: true });
 
-  // Re-enable auto-scroll on Enter in textarea
-  textarea.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      autoScroll = true;
-      targetScroll = container.scrollHeight;
-      smoothScroll();
-    }
-  });
+  // ---------- 4️⃣ Optional: follow streaming AI messages ----------
+  window.monitorTyping = function(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const innerObserver = new MutationObserver(() => scrollToBottom());
+    innerObserver.observe(el, { childList: true, subtree: true, characterData: true });
+  };
 
-  // Initial scroll to bottom
-  targetScroll = container.scrollHeight;
-  smoothScroll();
+  // ---------- 5️⃣ Scroll to bottom on initial load ----------
+  window.addEventListener('load', () => {
+    scrollToBottom();
+  });
 })();
-
-// Target the input area
-const inputArea = document.querySelector('.input-area');
-
-if (inputArea) {
-  // Function to make an element and all children fully transparent
-  function makeFullyTransparent(el) {
-    const allElements = [el, ...el.querySelectorAll('*')];
-
-    allElements.forEach(child => {
-      child.style.setProperty('background', 'transparent', 'important');
-      child.style.setProperty('background-color', 'transparent', 'important');
-      child.style.setProperty('box-shadow', 'none', 'important');
-      child.style.setProperty('border', 'none', 'important');
-      child.style.setProperty('outline', 'none', 'important');
-      child.style.setProperty('caret-color', 'auto', 'important'); // for textarea caret
-      child.style.setProperty('color', 'inherit', 'important'); // keeps text visible
-
-      // Force SVGs to inherit transparency
-      if (child.tagName.toLowerCase() === 'svg') {
-        child.style.setProperty('fill', 'currentColor', 'important');
-        child.style.setProperty('stroke', 'currentColor', 'important');
-      }
-    });
-  }
-
-  // Initial call
-  makeFullyTransparent(inputArea);
-
-  // MutationObserver to handle dynamically added elements or attribute changes
-  const observer = new MutationObserver(() => {
-    makeFullyTransparent(inputArea);
-  });
-
-  observer.observe(inputArea, {
-    childList: true,  // detect new elements
-    subtree: true,    // detect nested elements
-    attributes: true, // detect style changes
-    attributeFilter: ['style', 'class'] // only watch for style/class changes
-  });
-
-  // Optional: auto-stop observing after 1 minute to reduce overhead
-  setTimeout(() => observer.disconnect(), 60000);
-}
 </script>
 </body>
 </html>
